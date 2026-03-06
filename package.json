@@ -1,0 +1,60 @@
+{
+  "name": "@vllnt/logger",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Structured logging for the @vllnt ecosystem",
+  "license": "MIT",
+  "author": "bntvllnt",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vllnt/logger"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./convex": {
+      "import": "./dist/convex.js",
+      "types": "./dist/convex.d.ts"
+    },
+    "./posthog": {
+      "import": "./dist/posthog.js",
+      "types": "./dist/posthog.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing.js",
+      "types": "./dist/testing.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint --max-warnings 0",
+    "lint:fix": "eslint --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@vllnt/eslint-config": "^1.0.0",
+    "@vllnt/typescript": "^1.0.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

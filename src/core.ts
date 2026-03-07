@@ -52,9 +52,9 @@ export type LoggerConfig = {
 
 const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   debug: 0,
+  error: 3,
   info: 1,
   warn: 2,
-  error: 3,
 };
 
 function shouldLog(level: LogLevel, configuredLevel: LogLevel): boolean {
@@ -119,10 +119,62 @@ export function createLogger(scope: string, config: LoggerConfig): Logger {
   };
 }
 
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function createWithTiming(base: Logger): ExtendedLogger["withTiming"] {
+  return async <T>(
+    label: string,
+    execute: () => Promise<T>,
+    extraData?: LogData,
+  ): Promise<T> => {
+    const start = Date.now();
+    base.info(`${label}.start`, extraData);
+    try {
+      const result = await execute();
+      base.info(`${label}.complete`, {
+        ...extraData,
+        durationMs: Date.now() - start,
+      });
+      return result;
+    } catch (error) {
+      base.error(`${label}.error`, {
+        ...extraData,
+        durationMs: Date.now() - start,
+        error: formatError(error),
+      });
+      throw error;
+    }
+  };
+}
+
+function createWithTimingSync(base: Logger): ExtendedLogger["withTimingSync"] {
+  return <T>(label: string, execute: () => T, extraData?: LogData): T => {
+    const start = Date.now();
+    base.info(`${label}.start`, extraData);
+    try {
+      const result = execute();
+      base.info(`${label}.complete`, {
+        ...extraData,
+        durationMs: Date.now() - start,
+      });
+      return result;
+    } catch (error) {
+      base.error(`${label}.error`, {
+        ...extraData,
+        durationMs: Date.now() - start,
+        error: formatError(error),
+      });
+      throw error;
+    }
+  };
+}
+
 /**
  * Create an extended logger with timing helpers.
  *
- * @remarks Caught errors are logged with `error.message` verbatim.
+ * @remarks Caught errors use `error.message` verbatim.
  * Callers handling sensitive errors should sanitize before throwing.
  */
 export function createExtendedLogger(
@@ -130,59 +182,10 @@ export function createExtendedLogger(
   config: LoggerConfig,
 ): ExtendedLogger {
   const base = createLogger(scope, config);
-
-  const withTiming = async <T>(
-    label: string,
-    execute: () => Promise<T>,
-    extraData?: LogData,
-  ): Promise<T> => {
-    const start = Date.now();
-    base.info(`${label}.start`, extraData);
-
-    try {
-      const result = await execute();
-      const durationMs = Date.now() - start;
-      base.info(`${label}.complete`, { ...extraData, durationMs });
-      return result;
-    } catch (error) {
-      const durationMs = Date.now() - start;
-      base.error(`${label}.error`, {
-        ...extraData,
-        durationMs,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  };
-
-  const withTimingSync = <T>(
-    label: string,
-    execute: () => T,
-    extraData?: LogData,
-  ): T => {
-    const start = Date.now();
-    base.info(`${label}.start`, extraData);
-
-    try {
-      const result = execute();
-      const durationMs = Date.now() - start;
-      base.info(`${label}.complete`, { ...extraData, durationMs });
-      return result;
-    } catch (error) {
-      const durationMs = Date.now() - start;
-      base.error(`${label}.error`, {
-        ...extraData,
-        durationMs,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  };
-
   return {
     ...base,
-    withTiming,
-    withTimingSync,
+    withTiming: createWithTiming(base),
+    withTimingSync: createWithTimingSync(base),
   };
 }
 
@@ -195,7 +198,7 @@ export function consoleOutput(entry: LogEntry): void {
   try {
     message = JSON.stringify(entry);
   } catch {
-    message = `[logger:serialize-error] event=${String(entry.event)} level=${String(entry.level)}`;
+    message = `[logger:serialize-error] event=${entry.event} level=${entry.level}`;
   }
 
   switch (entry.level) {
@@ -212,23 +215,20 @@ export function consoleOutput(entry: LogEntry): void {
       console.warn(message);
       break;
     default:
-      console.log(message);
+      console.info(message);
       break;
   }
 }
 
-/**
- * Compose multiple outputs into a single LogOutput.
- * Each output is isolated — if one throws, others still execute.
- */
+/** Compose outputs into a single LogOutput. Each output runs in isolation. */
 export function composeOutputs(...outputs: LogOutput[]): LogOutput {
   return (entry: LogEntry): void => {
-    for (const output of outputs) {
+    outputs.forEach((output) => {
       try {
         output(entry);
       } catch {
         // Isolated — other outputs continue
       }
-    }
+    });
   };
 }

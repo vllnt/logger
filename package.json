@@ -1,6 +1,6 @@
 {
   "name": "@vllnt/logger",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "Structured logging for the @vllnt ecosystem",
   "license": "MIT",

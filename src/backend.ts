@@ -2,15 +2,15 @@
  * @vllnt/logger — Backend preset.
  *
  * Pre-configured logger for Node.js backends.
- * Reads LOG_LEVEL from process.env lazily (no module-level side effects).
+ * Reads LOG_LEVEL from process.env on each call (no module-level side effects).
  */
 
 import {
   consoleOutput,
   createExtendedLogger,
-  parseLogLevel,
   type ExtendedLogger,
   type LogLevel,
+  parseLogLevel,
 } from "./core.js";
 
 const HAS_PROCESS = typeof process !== "undefined";

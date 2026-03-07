@@ -1,7 +1,7 @@
 /**
  * @vllnt/logger — Convex-safe logger.
  *
- * Imports ONLY from core.ts (no process.env, no crypto).
+ * Imports from core.ts (no process.env, no crypto).
  * Works in Convex queries, mutations, and actions.
  */
 
@@ -14,7 +14,7 @@ import {
 
 /**
  * Create a logger for Convex functions.
- * Level must be passed explicitly (Convex has no process.env in queries/mutations).
+ * Pass level explicitly (Convex has no process.env in queries/mutations).
  * Defaults to "info".
  */
 export function createConvexLogger(

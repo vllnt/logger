@@ -4,20 +4,19 @@
  * Core exports + backend preset.
  */
 
+export { createBackendLogger } from "./backend.js";
 export {
   composeOutputs,
   consoleOutput,
   createExtendedLogger,
   createLogger,
-  formatLogEntry,
-  parseLogLevel,
   type ExtendedLogger,
+  formatLogEntry,
   type LogData,
   type LogEntry,
   type Logger,
   type LoggerConfig,
   type LogLevel,
   type LogOutput,
+  parseLogLevel,
 } from "./core.js";
-
-export { createBackendLogger } from "./backend.js";

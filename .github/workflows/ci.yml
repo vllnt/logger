@@ -1,13 +1,16 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
-  ci:
+  quality:
+    name: Quality Gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +24,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run lint
-      - run: pnpm run check-types
-      - run: pnpm run test
-      - run: pnpm run build
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run check-types
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Test
+        run: pnpm run test

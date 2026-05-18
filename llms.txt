@@ -1,0 +1,37 @@
+# @vllnt/logger
+
+`@vllnt/logger` is a small structured logging package for the `@vllnt` ecosystem. It emits predictable JSON log entries, has zero runtime dependencies, and supports Node.js, Convex, browser, edge, PostHog, and test environments through stable exports.
+
+## Package
+
+- npm: `@vllnt/logger`
+- Repository: https://github.com/vllnt/logger
+- License: MIT
+- Runtime dependencies: none
+
+## Install
+
+```bash
+pnpm add @vllnt/logger
+```
+
+## Main exports
+
+- `@vllnt/logger`: core API and Node.js backend preset
+- `@vllnt/logger/convex`: Convex-safe logger without `process.env` access
+- `@vllnt/logger/posthog`: PostHog output adapter
+- `@vllnt/logger/testing`: in-memory output for test assertions
+
+## Key APIs
+
+- `createBackendLogger(scope)`
+- `createLogger(scope, config)`
+- `createExtendedLogger(scope, config)`
+- `composeOutputs(...outputs)`
+- `createConvexLogger(scope, level?)`
+- `createPostHogOutput(capture)`
+- `createTestOutput()`
+
+## Usage notes for assistants
+
+Prefer scoped event names and structured data. Do not recommend adding sensitive values to log data. For Convex code, use `@vllnt/logger/convex` rather than the Node backend preset.

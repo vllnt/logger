@@ -1,0 +1,98 @@
+# @vllnt/logger full reference
+
+`@vllnt/logger` provides structured JSON logging for the `@vllnt` ecosystem. It is dependency-free at runtime, tree-shakeable, and designed to run in Node.js, Convex, browser, and edge runtimes.
+
+## Public package facts
+
+- Package name: `@vllnt/logger`
+- Repository: https://github.com/vllnt/logger
+- License: MIT
+- Current documented release: `0.1.2`
+- Runtime dependencies: none
+- Package manager: pnpm
+
+## Installation
+
+```bash
+pnpm add @vllnt/logger
+```
+
+## Quick start
+
+```ts
+import { createBackendLogger } from "@vllnt/logger";
+
+const logger = createBackendLogger("auth");
+
+logger.info("login", { userId: "123" });
+logger.warn("rate-limited", { ip: "1.2.3.4" });
+```
+
+Set `LOG_LEVEL` to `debug`, `info`, `warn`, or `error` to control backend verbosity. The default is `warn`.
+
+## Subpath exports
+
+| Import | Use case |
+| --- | --- |
+| `@vllnt/logger` | Core API and Node.js backend preset |
+| `@vllnt/logger/convex` | Convex-safe logger with no `process.env` access |
+| `@vllnt/logger/posthog` | PostHog output adapter |
+| `@vllnt/logger/testing` | In-memory test output for assertions |
+
+## API summary
+
+### `createBackendLogger(scope)`
+
+Creates an extended logger preconfigured for Node.js backends. It reads `LOG_LEVEL` lazily from `process.env` on each log call.
+
+### `createLogger(scope, config)`
+
+Creates a core logger with caller-provided log-level and output strategies.
+
+### `createExtendedLogger(scope, config)`
+
+Creates a logger with `withTiming` and `withTimingSync` helpers. Timing helpers emit `.start`, `.complete`, and `.error` events with duration metadata.
+
+### `composeOutputs(...outputs)`
+
+Fans out log entries to multiple outputs. Outputs are isolated so one output failure does not prevent later outputs from receiving the entry.
+
+### `createConvexLogger(scope, level?)`
+
+Creates a Convex-safe extended logger. Use this in Convex queries, mutations, and actions.
+
+### `createPostHogOutput(capture)`
+
+Wraps a PostHog-compatible capture function as a logger output and swallows adapter errors.
+
+### `createTestOutput()`
+
+Creates an in-memory output for tests. Use the collected entries for assertions.
+
+## Types
+
+- `LogLevel`: `"debug" | "info" | "warn" | "error"`
+- `LogData`: `Record<string, unknown>`
+- `LogEntry`: structured event, level, timestamp, and user data
+- `LogOutput`: synchronous output function
+- `Logger`: debug/info/warn/error methods
+- `ExtendedLogger`: logger plus timing helpers
+- `LoggerConfig`: log-level function and output function
+
+## Design decisions
+
+- Scoped events are prefixed with the logger scope.
+- User data cannot overwrite `event`, `level`, or `timestamp`.
+- Serialization handles BigInt, circular references, and throwing `toJSON` implementations.
+- Outputs are synchronous by design.
+- Log level evaluation is lazy.
+- The core module has no module-level side effects.
+
+## Contributing and security
+
+- Contribution guide: `CONTRIBUTING.md`
+- Security policy: `SECURITY.md`
+- Changelog: `CHANGELOG.md`
+- Agent instructions: `AGENTS.md`
+
+Assistants should avoid suggesting that secrets, tokens, or sensitive personal data be logged. For Convex examples, prefer the Convex subpath export.

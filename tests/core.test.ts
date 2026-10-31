@@ -225,22 +225,192 @@ describe("consoleOutput", () => {
     errorSpy.mockRestore();
   });
 
-  it("handles unserializable data without crashing (AC-9)", () => {
+  it("falls back to a minimal line for unserializable data (AC-9)", () => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
     const entry: LogEntry = {
       event: "test",
       level: "info",
       timestamp: new Date().toISOString(),
-      value: BigInt(123),
+      value: {
+        toJSON() {
+          throw new Error("boom");
+        },
+      },
     };
 
     expect(() => consoleOutput(entry)).not.toThrow();
     expect(infoSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[logger:serialize-error]"),
+      "[logger:serialize-error] event=test level=info",
     );
 
     infoSpy.mockRestore();
+  });
+
+  it("keeps the entry when it holds a BigInt", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    consoleOutput({ ...formatLogEntry("info", "big"), value: BigInt(123) });
+
+    const parsed = JSON.parse(infoSpy.mock.calls[0]![0] as string);
+    expect(parsed).toMatchObject({ event: "big", value: "123" });
+
+    infoSpy.mockRestore();
+  });
+
+  it("serializes Error values with name, message and stack", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    consoleOutput({
+      ...formatLogEntry("info", "err"),
+      error: new TypeError("bad input"),
+    });
+
+    const parsed = JSON.parse(infoSpy.mock.calls[0]![0] as string);
+    expect(parsed.error).toMatchObject({
+      message: "bad input",
+      name: "TypeError",
+    });
+    expect(parsed.error.stack).toContain("bad input");
+
+    infoSpy.mockRestore();
+  });
+
+  it("marks circular references and keeps repeated references", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const circular: Record<string, unknown> = { id: 1 };
+    circular.self = circular;
+    const shared = { ok: true };
+
+    consoleOutput({
+      ...formatLogEntry("info", "circ"),
+      a: shared,
+      b: shared,
+      circular,
+    });
+
+    const parsed = JSON.parse(infoSpy.mock.calls[0]![0] as string);
+    expect(parsed.circular).toEqual({ id: 1, self: "[Circular]" });
+    expect(parsed.a).toEqual({ ok: true });
+    expect(parsed.b).toEqual({ ok: true });
+
+    infoSpy.mockRestore();
+  });
+
+  it("does not throw when the console method throws", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {
+      throw new Error("console closed");
+    });
+
+    expect(() => consoleOutput(formatLogEntry("info", "x"))).not.toThrow();
+
+    infoSpy.mockRestore();
+  });
+
+  it("routes an unknown level to console.info", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    consoleOutput({
+      ...formatLogEntry("info", "x"),
+      level: "trace" as LogEntry["level"],
+    });
+
+    expect(infoSpy).toHaveBeenCalledOnce();
+
+    infoSpy.mockRestore();
+  });
+});
+
+describe("never throws from a log call", () => {
+  it("swallows a throwing output", () => {
+    const logger = createLogger("t", {
+      getLogLevel: () => "debug",
+      output: () => {
+        throw new Error("sink down");
+      },
+    });
+
+    expect(() => logger.error("e", { a: 1 })).not.toThrow();
+  });
+
+  it("swallows a throwing data getter", () => {
+    const entries: LogEntry[] = [];
+    const logger = createLogger("t", {
+      getLogLevel: () => "debug",
+      output: (entry) => entries.push(entry),
+    });
+    const data = {
+      get bad(): string {
+        throw new Error("getter");
+      },
+    };
+
+    expect(() => logger.info("e", data)).not.toThrow();
+    expect(entries).toHaveLength(0);
+  });
+
+  it("falls back to info when getLogLevel throws", () => {
+    const entries: LogEntry[] = [];
+    const logger = createLogger("t", {
+      getLogLevel: () => {
+        throw new Error("no level");
+      },
+      output: (entry) => entries.push(entry),
+    });
+
+    expect(() => {
+      logger.debug("dropped");
+      logger.info("kept");
+    }).not.toThrow();
+    expect(entries.map((entry) => entry.event)).toEqual(["t.kept"]);
+  });
+
+  it("falls back to info when getLogLevel returns an invalid level", () => {
+    const entries: LogEntry[] = [];
+    const logger = createLogger("t", {
+      getLogLevel: () => "verbose" as never,
+      output: (entry) => entries.push(entry),
+    });
+
+    logger.debug("dropped");
+    logger.warn("kept");
+
+    expect(entries.map((entry) => entry.event)).toEqual(["t.kept"]);
+  });
+
+  it("withTiming rethrows the original error even if output fails", async () => {
+    const failure = new Error("work failed");
+    const logger = createExtendedLogger("t", {
+      getLogLevel: () => "debug",
+      output: () => {
+        throw new Error("sink down");
+      },
+    });
+
+    await expect(
+      logger.withTiming("op", () => Promise.reject(failure)),
+    ).rejects.toBe(failure);
+    expect(() =>
+      logger.withTimingSync("op", () => {
+        throw failure;
+      }),
+    ).toThrow(failure);
+  });
+
+  it("withTiming logs a placeholder when a thrown value cannot be printed", () => {
+    const entries: LogEntry[] = [];
+    const logger = createExtendedLogger("t", {
+      getLogLevel: () => "debug",
+      output: (entry) => entries.push(entry),
+    });
+    const unprintable = Object.create(null) as object;
+
+    expect(() =>
+      logger.withTimingSync("op", () => {
+        throw unprintable;
+      }),
+    ).toThrow();
+    expect(entries.at(-1)!.error).toBe("[unprintable error]");
   });
 });
 

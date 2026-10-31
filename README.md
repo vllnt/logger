@@ -27,12 +27,12 @@ Set `LOG_LEVEL` env var to control verbosity (`debug`, `info`, `warn`, `error`).
 
 ## Subpath Exports
 
-| Import | Use Case |
-|--------|----------|
-| `@vllnt/logger` | Core API + Node.js backend preset |
-| `@vllnt/logger/convex` | Convex-safe logger (no `process.env`) |
-| `@vllnt/logger/posthog` | PostHog output adapter |
-| `@vllnt/logger/testing` | In-memory test output for assertions |
+| Import                  | Use Case                              |
+| ----------------------- | ------------------------------------- |
+| `@vllnt/logger`         | Core API + Node.js backend preset     |
+| `@vllnt/logger/convex`  | Convex-safe logger (no `process.env`) |
+| `@vllnt/logger/posthog` | PostHog output adapter                |
+| `@vllnt/logger/testing` | In-memory test output for assertions  |
 
 ## API
 
@@ -97,7 +97,7 @@ logger.info("started");
 
 ### `createPostHogOutput(capture): LogOutput`
 
-Wraps a PostHog-compatible `capture` function as a `LogOutput`. Swallows errors.
+Wraps a PostHog-compatible `capture` function as a `LogOutput`. Swallows thrown errors and rejected promises.
 
 ```ts
 import { createPostHogOutput } from "@vllnt/logger/posthog";
@@ -125,21 +125,29 @@ expect(entries[0].event).toBe("test.hello");
 
 ### Utilities
 
-| Function | Description |
-|----------|-------------|
-| `formatLogEntry(level, event, data?)` | Build a `LogEntry` manually |
-| `parseLogLevel(value, default?)` | Safe `string` to `LogLevel` parsing |
-| `consoleOutput(entry)` | JSON to `console.debug/info/warn/error` (crash-safe) |
+| Function                              | Description                                          |
+| ------------------------------------- | ---------------------------------------------------- |
+| `formatLogEntry(level, event, data?)` | Build a `LogEntry` manually                          |
+| `parseLogLevel(value, default?)`      | Safe `string` to `LogLevel` parsing                  |
+| `consoleOutput(entry)`                | JSON to `console.debug/info/warn/error` (crash-safe) |
 
 ## Types
 
 ```ts
 type LogLevel = "debug" | "info" | "warn" | "error";
 type LogData = Record<string, unknown>;
-type LogEntry = { event: string; level: LogLevel; timestamp: string } & Record<string, unknown>;
+type LogEntry = { event: string; level: LogLevel; timestamp: string } & Record<
+  string,
+  unknown
+>;
 type LogOutput = (entry: LogEntry) => void;
-type Logger = { debug, info, warn, error: (event: string, data?: LogData) => void };
-type ExtendedLogger = Logger & { withTiming, withTimingSync };
+type Logger = {
+  debug;
+  info;
+  warn;
+  error: (event: string, data?: LogData) => void;
+};
+type ExtendedLogger = Logger & { withTiming; withTimingSync };
 type LoggerConfig = { getLogLevel: () => LogLevel; output: LogOutput };
 ```
 
@@ -147,10 +155,22 @@ type LoggerConfig = { getLogLevel: () => LogLevel; output: LogOutput };
 
 - **Scoped events**: All events are prefixed with the logger scope (`auth.login`, `payments.charge`)
 - **Reserved field protection**: User data cannot overwrite `event`, `level`, or `timestamp`
-- **Crash-safe serialization**: `BigInt`, circular refs, and throwing `toJSON` are caught gracefully
+- **Log calls never throw**: a failing `getLogLevel`, output, or data getter is swallowed; an invalid level falls back to `info`
+- **Crash-safe serialization**: `consoleOutput` writes `BigInt` as a string, `Error` as `{ name, message, stack }`, and circular refs as `"[Circular]"`; a throwing `toJSON` degrades to a minimal `event`/`level` line
+- **No built-in redaction**: pass only data you are willing to log. `withTiming` logs `error.message` verbatim, so sanitize sensitive errors before throwing them
 - **Synchronous outputs**: `LogOutput` is synchronous by design — async adapters manage their own promises
 - **Lazy level evaluation**: `getLogLevel()` is called per-emit, so env changes are picked up without restart
 - **Zero side effects**: Core module has zero module-level side effects (`sideEffects: false`)
+
+## Releases
+
+Every publish runs in `.github/workflows/publish.yml` with npm trusted publishing and provenance;
+nothing is published from a local machine. Maintainers only.
+
+- Canary (`@canary`): every push to `main` that touches the package publishes one
+  (`pnpm add @vllnt/logger@canary`).
+- Stable (`@latest`): merge a PR that sets `package.json` `version` and adds a matching
+  `## [X.Y.Z]` entry to `CHANGELOG.md`, then push the tag `vX.Y.Z` on that `main` commit.
 
 ## License
 

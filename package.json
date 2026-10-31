@@ -1,6 +1,6 @@
 {
   "name": "@vllnt/logger",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "Structured logging for the @vllnt ecosystem",
   "license": "MIT",
@@ -12,20 +12,20 @@
   "sideEffects": false,
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./convex": {
-      "import": "./dist/convex.js",
-      "types": "./dist/convex.d.ts"
+      "types": "./dist/convex.d.ts",
+      "import": "./dist/convex.js"
     },
     "./posthog": {
-      "import": "./dist/posthog.js",
-      "types": "./dist/posthog.d.ts"
+      "types": "./dist/posthog.d.ts",
+      "import": "./dist/posthog.js"
     },
     "./testing": {
-      "import": "./dist/testing.js",
-      "types": "./dist/testing.d.ts"
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     }
   },
   "files": [
@@ -33,12 +33,11 @@
   ],
   "scripts": {
     "build": "tsup",
-    "check-types": "tsc --noEmit",
-    "lint": "eslint --max-warnings 0",
-    "lint:fix": "eslint --fix",
+    "check-types": "tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/check-types.tsbuildinfo",
+    "lint": "eslint --cache --cache-location node_modules/.cache/eslint/ --max-warnings 0",
+    "lint:fix": "eslint --cache --cache-location node_modules/.cache/eslint/ --fix",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "prepublishOnly": "pnpm run build"
+    "test:watch": "vitest"
   },
   "publishConfig": {
     "access": "public",
@@ -54,9 +53,13 @@
     "typescript": "^6.0.3",
     "vitest": "^5.0.5"
   },
-  "packageManager": "pnpm@10.28.2",
+  "packageManager": "pnpm@10.34.8",
   "pnpm": {
-    "onlyBuiltDependencies": [
+    "minimumReleaseAge": 10080,
+    "minimumReleaseAgeExclude": [
+      "@vllnt/*"
+    ],
+    "ignoredBuiltDependencies": [
       "esbuild"
     ],
     "overrides": {

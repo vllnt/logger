@@ -12,20 +12,20 @@
   "sideEffects": false,
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./convex": {
-      "import": "./dist/convex.js",
-      "types": "./dist/convex.d.ts"
+      "types": "./dist/convex.d.ts",
+      "import": "./dist/convex.js"
     },
     "./posthog": {
-      "import": "./dist/posthog.js",
-      "types": "./dist/posthog.d.ts"
+      "types": "./dist/posthog.d.ts",
+      "import": "./dist/posthog.js"
     },
     "./testing": {
-      "import": "./dist/testing.js",
-      "types": "./dist/testing.d.ts"
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     }
   },
   "files": [

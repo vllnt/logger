@@ -95,11 +95,29 @@ export function formatLogEntry(
   };
 }
 
-/** Create a scoped logger with the given configuration. */
+/** Resolve the configured level; a throwing or invalid `getLogLevel` falls back to "info". */
+function resolveLevel(config: LoggerConfig): LogLevel {
+  try {
+    return parseLogLevel(config.getLogLevel(), "info");
+  } catch {
+    return "info";
+  }
+}
+
+/**
+ * Create a scoped logger with the given configuration.
+ *
+ * Log calls never throw: a failing `getLogLevel`, `output`, or data getter is
+ * swallowed so logging cannot break the host application.
+ */
 export function createLogger(scope: string, config: LoggerConfig): Logger {
   const log = (level: LogLevel, event: string, data?: LogData): void => {
-    if (shouldLog(level, config.getLogLevel())) {
-      config.output(formatLogEntry(level, `${scope}.${event}`, data));
+    try {
+      if (shouldLog(level, resolveLevel(config))) {
+        config.output(formatLogEntry(level, `${scope}.${event}`, data));
+      }
+    } catch {
+      // Swallowed — logging failures must not propagate
     }
   };
 
@@ -120,7 +138,11 @@ export function createLogger(scope: string, config: LoggerConfig): Logger {
 }
 
 function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  try {
+    return error instanceof Error ? error.message : String(error);
+  } catch {
+    return "[unprintable error]";
+  }
 }
 
 function createWithTiming(base: Logger): ExtendedLogger["withTiming"] {
@@ -190,33 +212,70 @@ export function createExtendedLogger(
 }
 
 /**
- * Default console output handler. Crash-safe — wraps JSON.stringify
- * in try/catch to handle BigInt, circular refs, throwing toJSON.
+ * JSON.stringify replacer that keeps entries serializable. It turns BigInt
+ * into a string, Error into `{ name, message, stack }`, and circular
+ * references into "[Circular]". Repeated non-circular references stay intact.
+ */
+function createReplacer(): (
+  this: unknown,
+  key: string,
+  value: unknown,
+) => unknown {
+  const ancestors: unknown[] = [];
+  return function replacer(this: unknown, _key: string, value: unknown) {
+    if (typeof value === "bigint") {
+      return value.toString();
+    }
+    const resolved =
+      value instanceof Error
+        ? { message: value.message, name: value.name, stack: value.stack }
+        : value;
+    if (typeof resolved !== "object" || resolved === null) {
+      return resolved;
+    }
+    // Drop everything below the current holder: the rest is a finished sibling branch.
+    ancestors.splice(ancestors.indexOf(this) + 1);
+    if (ancestors.includes(resolved)) {
+      return "[Circular]";
+    }
+    ancestors.push(resolved);
+    return resolved;
+  };
+}
+
+/**
+ * Default console output handler. Never throws. It handles BigInt, Error and
+ * circular values; anything still unserializable (throwing toJSON or getters)
+ * degrades to a minimal event/level line, and console failures disappear.
  */
 export function consoleOutput(entry: LogEntry): void {
   let message: string;
   try {
-    message = JSON.stringify(entry);
+    message = JSON.stringify(entry, createReplacer());
   } catch {
     message = `[logger:serialize-error] event=${entry.event} level=${entry.level}`;
   }
 
-  switch (entry.level) {
-    case "debug":
-      console.debug(message);
-      break;
-    case "error":
-      console.error(message);
-      break;
-    case "info":
-      console.info(message);
-      break;
-    case "warn":
-      console.warn(message);
-      break;
-    default:
-      console.info(message);
-      break;
+  try {
+    switch (entry.level) {
+      case "debug":
+        console.debug(message);
+        break;
+      case "error":
+        console.error(message);
+        break;
+      case "info":
+        console.info(message);
+        break;
+      case "warn":
+        console.warn(message);
+        break;
+      default:
+        console.info(message);
+        break;
+    }
+  } catch {
+    // Swallowed — a broken console must not break the app
   }
 }
 

@@ -152,6 +152,16 @@ type LoggerConfig = { getLogLevel: () => LogLevel; output: LogOutput };
 - **Lazy level evaluation**: `getLogLevel()` is called per-emit, so env changes are picked up without restart
 - **Zero side effects**: Core module has zero module-level side effects (`sideEffects: false`)
 
+## Releases
+
+Every publish runs in `.github/workflows/publish.yml` with npm trusted publishing and provenance;
+nothing is published from a local machine. Maintainers only.
+
+- Canary (`@canary`): every push to `main` that touches the package publishes one
+  (`pnpm add @vllnt/logger@canary`).
+- Stable (`@latest`): merge a PR that sets `package.json` `version` and adds a matching
+  `## [X.Y.Z]` entry to `CHANGELOG.md`, then push the tag `vX.Y.Z` on that `main` commit.
+
 ## License
 
 [MIT](LICENSE)

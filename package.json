@@ -37,8 +37,7 @@
     "lint": "eslint --max-warnings 0",
     "lint:fix": "eslint --fix",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "prepublishOnly": "pnpm run build"
+    "test:watch": "vitest"
   },
   "publishConfig": {
     "access": "public",
@@ -54,9 +53,13 @@
     "typescript": "^6.0.3",
     "vitest": "^5.0.5"
   },
-  "packageManager": "pnpm@10.28.2",
+  "packageManager": "pnpm@10.34.8",
   "pnpm": {
-    "onlyBuiltDependencies": [
+    "minimumReleaseAge": 10080,
+    "minimumReleaseAgeExclude": [
+      "@vllnt/*"
+    ],
+    "ignoredBuiltDependencies": [
       "esbuild"
     ],
     "overrides": {

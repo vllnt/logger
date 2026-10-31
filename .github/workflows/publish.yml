@@ -1,194 +1,142 @@
 name: Publish
 
+# Canary: every push to main touching the package,
+# or a manual run on main. Stable (@latest): only a pushed vX.Y.Z tag whose commit is
+# on main and matches package.json and a CHANGELOG.md entry. Both use npm trusted
+# publishing (OIDC) with provenance; this workflow holds no npm token.
+
 on:
   push:
     branches: [main]
+    tags: ["v*.*.*"]
+    # Not evaluated for tag pushes.
     paths:
       - "src/**"
+      - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/publish.yml"
   workflow_dispatch:
-    inputs:
-      bump:
-        description: "Version bump type"
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
 
 concurrency:
-  group: publish-${{ github.event_name }}
-  cancel-in-progress: true
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
   quality:
     name: Quality Gates
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Typecheck
-        run: pnpm run check-types
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Test
-        run: pnpm run test
+      - run: pnpm lint
+      - run: pnpm check-types
+      - run: pnpm test
+      - run: pnpm build
 
   canary:
     name: Publish Canary
     needs: quality
-    if: github.event_name == 'push'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
-      id-token: write
       contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: pnpm
           registry-url: https://registry.npmjs.org
-
       - run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Upgrade npm for OIDC support
-        run: npm install -g npm@latest
-
+      - run: pnpm build
       - name: Publish canary
         run: |
+          set -euo pipefail
           sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
           unset NODE_AUTH_TOKEN
+
+          PKG=$(node -p "require('./package.json').name")
           BASE_VERSION=$(node -p "require('./package.json').version")
-          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
-          CANARY_VERSION="${BASE_VERSION}-canary.${SHORT_SHA}"
-          npm version "$CANARY_VERSION" --no-git-tag-version
-          TARBALL=$(pnpm pack --pack-destination /tmp | tail -1)
-          npm publish "$TARBALL" --tag canary --provenance --access public
+          # A canary of an already-published version is work toward the next patch, so it
+          # must sort above that release.
+          if [ -n "$(npm view "${PKG}@${BASE_VERSION}" version 2>/dev/null || true)" ]; then
+            BASE_VERSION=$(node -e "const v=require('./package.json').version.split('.').map(Number); console.log(v[0]+'.'+v[1]+'.'+(v[2]+1))")
+          fi
+          CANARY_VERSION="${BASE_VERSION}-canary.${GITHUB_SHA::7}"
+          npm version "$CANARY_VERSION" --no-git-tag-version --ignore-scripts
+          npm publish --tag canary --provenance --access public --ignore-scripts
 
   release:
     name: Publish Release
     needs: quality
-    if: github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PAT }}
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      - run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Bump version
-        id: version
+      - name: Verify release tag
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          npm version ${{ inputs.bump }} --no-git-tag-version
+          set -euo pipefail
           VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::package.json version $VERSION is not a stable semver"; exit 1; }
+          [ "$TAG" = "v$VERSION" ] || { echo "::error::tag $TAG does not match package.json version $VERSION"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$TAG is not on main"; exit 1; }
+          grep -qF "## [$VERSION]" CHANGELOG.md || { echo "::error::CHANGELOG.md has no [$VERSION] entry"; exit 1; }
+          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
 
-      - name: Generate changelog
-        id: changelog
-        run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$LAST_TAG" ]; then
-            RANGE="HEAD"
-          else
-            RANGE="${LAST_TAG}..HEAD"
-          fi
-
-          {
-            echo "body<<CHANGELOG_EOF"
-
-            FEATS=$(git log "$RANGE" --pretty=format:"%s" --grep="^feat" 2>/dev/null || true)
-            if [ -n "$FEATS" ]; then
-              echo "### Features"
-              echo "$FEATS" | sed 's/^/- /'
-              echo ""
-            fi
-
-            FIXES=$(git log "$RANGE" --pretty=format:"%s" --grep="^fix" 2>/dev/null || true)
-            if [ -n "$FIXES" ]; then
-              echo "### Bug Fixes"
-              echo "$FIXES" | sed 's/^/- /'
-              echo ""
-            fi
-
-            OTHERS=$(git log "$RANGE" --pretty=format:"%s" --invert-grep --grep="^feat" --grep="^fix" 2>/dev/null || true)
-            if [ -n "$OTHERS" ]; then
-              echo "### Other Changes"
-              echo "$OTHERS" | sed 's/^/- /'
-              echo ""
-            fi
-
-            echo "CHANGELOG_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Commit and tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
-          git commit -m "chore(release): v${{ steps.version.outputs.version }}"
-          git tag -a "v${{ steps.version.outputs.version }}" -m "v${{ steps.version.outputs.version }}"
-          git push origin main --follow-tags
-
-      - name: Upgrade npm for OIDC support
-        run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
 
       - name: Publish to npm
         run: |
+          set -euo pipefail
           sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
           unset NODE_AUTH_TOKEN
-          TARBALL=$(pnpm pack --pack-destination /tmp | tail -1)
-          npm publish "$TARBALL" --tag latest --provenance --access public
+          PKG=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          # Re-runs after a later step failed must not try to republish.
+          if [ -n "$(npm view "${PKG}@${VERSION}" version 2>/dev/null || true)" ]; then
+            echo "${PKG}@${VERSION} is already published"
+          else
+            npm publish --tag latest --provenance --access public --ignore-scripts
+          fi
 
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
         run: |
-          cat <<'NOTES_EOF' > /tmp/release-notes.md
-          ${{ steps.changelog.outputs.body }}
-          NOTES_EOF
-          gh release create "v${{ steps.version.outputs.version }}" \
-            --title "v${{ steps.version.outputs.version }}" \
-            --notes-file /tmp/release-notes.md
+          PKG=$(node -p "require('./package.json').name")
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --verify-tag --title "$PKG $TAG" --notes-file "$RUNNER_TEMP/release-notes.md"

@@ -1,0 +1,24 @@
+# @vllnt/logger
+
+> Small structured logging package for the @vllnt ecosystem. Emits JSON log entries, has zero runtime dependencies, and never throws from a log call.
+
+Scoped events (`auth.login`), levels `debug`, `info`, `warn`, `error`, and pluggable synchronous outputs. The Node.js backend preset reads `LOG_LEVEL` from `process.env` on each call and defaults to `warn`. There is no built-in redaction.
+
+## Docs
+
+- [README](README.md): Install, API, entry points and design decisions
+- [Contributing](CONTRIBUTING.md): Development setup and release flow
+- [Changelog](CHANGELOG.md): Version history and release notes
+- [Agents](AGENTS.md): AI agent instructions for this codebase
+
+## Entry points
+
+- `@vllnt/logger`: core API and Node.js backend preset (`createBackendLogger`)
+- `@vllnt/logger/convex`: `createConvexLogger`, no `process.env` access
+- `@vllnt/logger/posthog`: `createPostHogOutput`
+- `@vllnt/logger/testing`: `createTestOutput`
+
+## Optional
+
+- [Security Policy](SECURITY.md): Vulnerability reporting
+- [License](LICENSE): MIT

@@ -10,7 +10,7 @@ tier: standard
 
 ## Context
 
-Structured logging is duplicated across @vllnt projects. `@songtrivia/logger` (922 LOC, single file) is battle-tested but hardcoded to songtrivia (Axiom dataset URL, platform env vars). Extract core logging into a generic `@vllnt/logger` package with composable provider adapters. Wide events, PII redaction, and tail sampling deferred to v2.
+Structured logging is duplicated across @vllnt projects. An existing host logger (922 LOC, single file) is battle-tested but hardcoded to one application (vendor dataset URL, platform env vars). Extract core logging into a generic `@vllnt/logger` package with composable provider adapters. Wide events, PII redaction, and tail sampling deferred to v2.
 
 ## Codebase Impact (MANDATORY)
 
@@ -30,7 +30,7 @@ Structured logging is duplicated across @vllnt projects. `@songtrivia/logger` (9
 | `tests/` | CREATE | Unit tests for core, backend, convex, posthog, testing, composeOutputs |
 
 **Files:** 12 create | 0 modify | 0 affected
-**Reuse:** Core createLogger/createExtendedLogger/consoleOutput from `@songtrivia/logger` (~300 LOC of 922)
+**Reuse:** Core createLogger/createExtendedLogger/consoleOutput from the existing host logger (~300 LOC of 922)
 **Breaking changes:** None (new package)
 **New dependencies:** None runtime. Dev: `@vllnt/eslint-config`, `@vllnt/typescript`, `vitest`, `tsup`, `@types/node`
 
@@ -77,7 +77,7 @@ Package exports → dist/
 
 ### Primary Journey
 
-ACTOR: Developer in @vllnt ecosystem (vllnt, the-forge, songtrivia, backtier, cortex, pm-killer)
+ACTOR: Developer in the @vllnt ecosystem (shared packages and host applications)
 GOAL: Add structured logging to their project with minimal config
 PRECONDITION: Project uses pnpm, TypeScript, ESM
 
@@ -280,7 +280,7 @@ All tests written BEFORE implementation (RED -> GREEN -> REFACTOR).
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|------------|
-| Migration friction for songtrivia (no createClientLogger, no wide events) | MED | HIGH | Document migration path; songtrivia keeps own logger until v2 ships wide events |
+| Migration friction for an existing host logger (no createClientLogger, no wide events) | MED | HIGH | Document migration path; that host keeps its own logger until v2 ships wide events |
 | tsup config complexity for subpath exports | LOW | MED | Simple config: 5 entry points, ESM only, dts: true |
 | Package name collision on npm | LOW | LOW | Check npm registry before publish |
 
@@ -302,12 +302,12 @@ All tests written BEFORE implementation (RED -> GREEN -> REFACTOR).
 | 2 | No peer deps for PostHog | Generic capture fn; consumer passes their own | PostHog types would improve DX | VALID | -> no action |
 | 3 | core.ts + backend.ts split is necessary | Prevents module-level side effects leaking into Convex/edge; enables sideEffects: false | More files than reference | VALID | -> no action (confirmed by spec review: 4 perspectives agree) |
 | 4 | Drop standalone log/warn/error/debug exports | Forces explicit scoping, avoids hidden global singleton | Less convenient for scripts | VALID | -> no action (user confirmed) |
-| 5 | Wide events deferred to v2 | Cuts scope to ~300 LOC; only songtrivia uses them today | Delays feature for songtrivia | VALID | -> no action (user confirmed) |
+| 5 | Wide events deferred to v2 | Cuts scope to ~300 LOC; only one host uses them today | Delays the feature for that host | VALID | -> no action (user confirmed) |
 
 ### Blind Spots
 
-1. **[Integration]** songtrivia migration: no createClientLogger, no wide events, no platform detection, no Axiom
-   Why it matters: songtrivia keeps its own logger until v2. Document this explicitly.
+1. **[Integration]** Existing-host migration: no createClientLogger, no wide events, no platform detection, no vendor sink
+   Why it matters: that host keeps its own logger until v2. Document this explicitly.
 
 2. **[DX]** LogOutput sync-only design not obvious from types
    Why it matters: consumer might return a Promise from output fn, expecting it to be awaited. TSDoc must state: "synchronous by design — async adapters must handle their own promises."
@@ -322,11 +322,11 @@ All tests written BEFORE implementation (RED -> GREEN -> REFACTOR).
 
 ### The Real Question
 
-v1 is the right scope: core logger + composeOutputs + convex + posthog + testing utilities. ~300 LOC. Ships in 4h. Proven patterns from songtrivia, minus the songtrivia-specific parts. Wide events are powerful but only 1 consumer uses them — defer per Rule of Three.
+v1 is the right scope: core logger + composeOutputs + convex + posthog + testing utilities. ~300 LOC. Ships in 4h. Proven patterns from the existing host logger, minus the application-specific parts. Wide events are powerful but only 1 consumer uses them — defer per Rule of Three.
 
 ### Open Items
 
-- [gap] songtrivia migration plan -> no action (songtrivia keeps own logger until v2 adds wide events)
+- [gap] existing-host migration plan -> no action (that host keeps its own logger until v2 adds wide events)
 - [improvement] v2 PII redaction: narrow regex patterns (word boundaries, not `/auth/i`) -> no action (v2 scope)
 
 ## Notes

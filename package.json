@@ -44,14 +44,14 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
-    "@vllnt/eslint-config": "^2.0.0",
+    "@types/node": "^26.6.6",
+    "@vllnt/eslint-config": "^2.1.0",
     "@vllnt/typescript": "^2.0.0",
     "eslint": "^9.39.5",
-    "prettier": "^3.9.10",
+    "prettier": "^3.10.1",
     "tsup": "^9.0.0",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "packageManager": "pnpm@10.34.8",
   "pnpm": {
@@ -63,6 +63,7 @@
       "esbuild"
     ],
     "overrides": {
+      "minimatch@>=7.0.0 <11.0.1": "11.0.5",
       "deepmerge-ts@<8.0.0": "^8.0.0",
       "handlebars@<4.7.10": "^4.7.10"
     }

@@ -178,7 +178,7 @@ There is no built-in redaction: pass only data you are willing to log. Report vu
 
 ## Related packages
 
-None. No other @vllnt package is a dependency of this one or shares code, a test or an example with it.
+None. This package has no runtime or peer dependencies, and no other @vllnt package shares code, a test or an example with it.
 
 ## Contributing
 

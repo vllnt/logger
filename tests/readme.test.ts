@@ -253,7 +253,7 @@ describe("README.md API and errors", () => {
 
   it("lists in Related packages only the None line or @vllnt packages this one works with in code", () => {
     const none =
-      "None. No other @vllnt package is a dependency of this one or shares code, a test or an example with it.";
+      "None. This package has no runtime or peer dependencies, and no other @vllnt package shares code, a test or an example with it.";
     const body = section("Related packages").trim();
     const listed = body === none ? [] : body.split("\n");
     const dependencies = ["dependencies", "devDependencies", "peerDependencies"].flatMap((field) => {

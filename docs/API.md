@@ -185,7 +185,7 @@ logger.info("created", { orderId });
 Calls `capture(entry.event, properties)`, where `properties` is the entry without `event`
 (`level`, `timestamp` and your data). Errors thrown by `capture`, and rejections of a promise it
 returns, are swallowed. No PostHog SDK dependency: pass your own function. posthog-js
-`capture(event, properties)` fits as is:
+`capture(event, properties)` takes the same parameters; the arrow wrapper keeps its `this` bound:
 
 ```ts
 import { createLogger } from "@vllnt/logger";

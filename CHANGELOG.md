@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.1.3] - Unreleased
 
+### Added
+
+- The npm package ships `docs/API.md` (every public export with an example), `llms.txt`,
+  `CHANGELOG.md` and the TypeScript sources in `src/`, so coding agents can read docs that match
+  the installed version from `node_modules/@vllnt/logger/`. `llms.txt` links the shipped files
+  with relative paths.
+- `package.json` sets `homepage` and `keywords`.
+
 ### Fixed
 
 - Log calls never throw. A throwing `getLogLevel`, output, or data getter is swallowed instead of

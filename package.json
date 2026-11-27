@@ -5,10 +5,21 @@
   "description": "Structured logging for the @vllnt ecosystem",
   "license": "MIT",
   "author": "bntvllnt",
+  "homepage": "https://oss.vllnt.com/packages/logger",
   "repository": {
     "type": "git",
     "url": "https://github.com/vllnt/logger"
   },
+  "keywords": [
+    "logger",
+    "logging",
+    "structured-logging",
+    "json",
+    "convex",
+    "posthog",
+    "typescript",
+    "zero-dependency"
+  ],
   "sideEffects": false,
   "exports": {
     ".": {
@@ -29,7 +40,11 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src",
+    "docs/API.md",
+    "CHANGELOG.md",
+    "llms.txt"
   ],
   "scripts": {
     "build": "tsup",

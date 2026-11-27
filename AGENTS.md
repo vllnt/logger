@@ -17,7 +17,9 @@ src/
   posthog.ts    ← createPostHogOutput
   testing.ts    ← createTestOutput
   index.ts      ← main entry (core + backend preset)
-tests/          ← vitest tests, one file per module
+tests/          ← vitest tests, one file per module; package.test.ts checks the tarball
+docs/API.md     ← public API reference, shipped in the npm package
+llms.txt        ← agent index, shipped in the npm package
 ```
 
 Entry points: `@vllnt/logger`, `@vllnt/logger/convex`, `@vllnt/logger/posthog`,
@@ -34,7 +36,7 @@ Node.js is pinned in `.node-version`; pnpm is pinned by `packageManager` in `pac
 | `pnpm check-types` | `tsc --noEmit` |
 | `pnpm test` | Vitest |
 | `pnpm build` | tsup build to `dist/` |
-| `pnpm pack --dry-run` | Preview tarball (`dist`, `README.md`, `LICENSE`, `package.json`) |
+| `pnpm pack --dry-run` | Preview tarball (`dist`, `src`, `docs/API.md`, `CHANGELOG.md`, `llms.txt`, `README.md`, `LICENSE`, `package.json`) |
 
 ## Conventions
 
@@ -42,7 +44,11 @@ Node.js is pinned in `.node-version`; pnpm is pinned by `packageManager` in `pac
 - Log calls never throw; keep that guarantee when changing `core.ts`.
 - User data cannot overwrite the reserved fields `event`, `level` and `timestamp`.
 - Keep `/convex` free of `process.env` and other Node-only assumptions.
-- Update `README.md`, `CHANGELOG.md` and `llms.txt` when changing the public API.
+- Update `README.md`, `docs/API.md`, `CHANGELOG.md` and `llms.txt` when changing the public API.
+  `tests/package.test.ts` fails when an export is missing from `docs/API.md` or a shipped file is
+  missing from the tarball.
+- `llms.txt` links shipped files with relative paths (`./docs/API.md`) and everything else
+  with absolute URLs.
 
 ## Publishing
 

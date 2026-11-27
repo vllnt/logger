@@ -12,6 +12,11 @@ on:
     # Not evaluated for tag pushes.
     paths:
       - "src/**"
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "llms.txt"
+      - "LICENSE"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/publish.yml"

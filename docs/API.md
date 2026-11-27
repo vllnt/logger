@@ -75,6 +75,8 @@ Both log `info` `<scope>.<label>.start` with `extraData`, then `info` `<scope>.<
 with `extraData` and `durationMs`. If `execute` throws, they log `error` `<scope>.<label>.error`
 with `extraData`, `durationMs` and `error` (the `Error` message, otherwise `String(value)`, or
 `"[unprintable error]"`), then rethrow the original error. The message is logged verbatim.
+An entry whose `extraData` cannot be read (for example a throwing getter) is dropped; the helpers
+still return the result or rethrow the original error.
 
 ```ts
 import { consoleOutput, createExtendedLogger } from "@vllnt/logger";

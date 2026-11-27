@@ -25,6 +25,7 @@ The docs are bundled in the package at `node_modules/@vllnt/logger/docs/`, with 
 - [Limits and gotchas](./README.md#limits-and-gotchas): Defaults and calls that silently do nothing
 - [README](./README.md): Install, quick start, API table, common tasks and compatibility
 - [Changelog](./CHANGELOG.md): Version history and release notes
+- [Links](./README.md#links): Package page, release feed, source, issues, npm and community links
 
 ## Entry points
 
@@ -43,6 +44,8 @@ The docs are bundled in the package at `node_modules/@vllnt/logger/docs/`, with 
 ## Ecosystem
 
 - [Package page](https://oss.vllnt.com/packages/logger)
+- [Release feed](https://oss.vllnt.com/packages/logger/rss.xml)
 - [All @vllnt packages](https://oss.vllnt.com/llms.txt)
+- [Search vllnt packages and docs](https://index.vllnt.com)
 - [vllnt](https://vllnt.com/llms.txt)
 - [Author](https://bntvllnt.com)

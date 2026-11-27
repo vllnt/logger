@@ -143,7 +143,7 @@ Log calls never throw. These are the error messages and markers you can see, and
 - Data keys `event`, `level` and `timestamp` are silently replaced by the logger's values.
 - `formatLogEntry` does not add the scope prefix; only logger methods do.
 - A throwing output is swallowed without a trace. `createPostHogOutput` also swallows rejected promises. Outputs are synchronous; returned promises are not awaited.
-- A throwing getter at the top level of the data drops the whole entry silently: it runs while the entry is built. A throwing getter deeper down gives the `[logger:serialize-error]` line.
+- A throwing getter at the top level of log-call data, or of `withTiming`/`withTimingSync` `extraData`, drops that entry silently: it runs while the entry is built. The timing helpers still return the result or rethrow the original error. A throwing getter deeper down gives the `[logger:serialize-error]` line.
 - `consoleOutput` writes `BigInt` as a string and `Error` as `{ name, message, stack }`. Like `JSON.stringify`, it writes `Map` and `Set` as `{}` and `NaN` as `null`; it drops `undefined`, functions and symbols from objects and writes them as `null` in arrays.
 - `withTiming` logs `error.message` verbatim, without the stack. There is no redaction.
 - `createTestOutput` keeps every entry in memory; create a new one per test.
@@ -178,8 +178,7 @@ There is no built-in redaction: pass only data you are willing to log. Report vu
 
 ## Related packages
 
-- [`@vllnt/analytics`](https://oss.vllnt.com/packages/analytics): product analytics with consent management.
-- [`@vllnt/convex-events`](https://oss.vllnt.com/packages/convex-events): an append-only activity feed stored in Convex.
+None. No other @vllnt package is a dependency of this one or shares code, a test or an example with it.
 
 ## Contributing
 
@@ -191,6 +190,15 @@ local machine. Maintainers only.
   (`pnpm add @vllnt/logger@canary`).
 - Stable (`@latest`): merge a PR that sets `package.json` `version` and adds a matching
   `## [X.Y.Z]` entry to `CHANGELOG.md`, then push the tag `vX.Y.Z` on that `main` commit.
+
+## Links
+
+- Docs and changelog: [oss.vllnt.com/packages/logger](https://oss.vllnt.com/packages/logger) · [release feed](https://oss.vllnt.com/packages/logger/rss.xml)
+- All @vllnt packages: [oss.vllnt.com](https://oss.vllnt.com) · [search packages and docs on index.vllnt.com](https://index.vllnt.com)
+- Source and issues: [GitHub](https://github.com/vllnt/logger) · [issues](https://github.com/vllnt/logger/issues) · [npm](https://www.npmjs.com/package/@vllnt/logger)
+- Questions and updates: [Discord](https://bntvllnt.com/discord) · [X @bntvllnt](https://x.com/bntvllnt)
+- Company and author: [vllnt.com](https://vllnt.com) · [bntvllnt.com](https://bntvllnt.com) · [GitHub @bntvllnt](https://github.com/bntvllnt) · [LinkedIn](https://linkedin.com/in/bntvllnt)
+- Sponsor: [GitHub Sponsors](https://github.com/sponsors/bntvllnt)
 
 ## License
 

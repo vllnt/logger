@@ -1,10 +1,12 @@
 /**
  * Shared helpers for the docs and package tests: package paths, exports per
- * entry point, Markdown links, anchors and code blocks, and in-memory
- * type-checking of code examples.
+ * entry point, Markdown links, anchors and code blocks, in-memory type-checking
+ * of code examples, and a consumer project that checks and runs them against
+ * the built package.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -189,4 +191,67 @@ export function typeCheck(files: Map<string, string>, options: ts.CompilerOption
       const text = diagnostic.file.text.split("\n")[line]?.trim();
       return `${diagnostic.file.fileName}: ${text}\n  ${message}`;
     });
+}
+
+/**
+ * Creates a temp ESM consumer project whose `node_modules/@vllnt/logger` links to
+ * this repo, so imports resolve to the built package through its `exports` map.
+ * posthog-node and vitest are linked too, for the examples that use them.
+ * The caller removes the directory.
+ */
+export function createConsumerProject(prefix: string): string {
+  const project = mkdtempSync(join(tmpdir(), prefix));
+  writeFileSync(join(project, "package.json"), '{ "type": "module" }\n');
+  mkdirSync(join(project, "node_modules", "@vllnt"), { recursive: true });
+  symlinkSync(root, join(project, "node_modules", "@vllnt", "logger"));
+  for (const dependency of ["posthog-node", "vitest"]) {
+    symlinkSync(realpathSync(join(root, "node_modules", dependency)), join(project, "node_modules", dependency));
+  }
+  return project;
+}
+
+/** Strict compiler options of a consumer project, for type-checking doc examples. */
+export const consumerOptions: ts.CompilerOptions = {
+  exactOptionalPropertyTypes: true,
+  module: ts.ModuleKind.NodeNext,
+  moduleResolution: ts.ModuleResolutionKind.NodeNext,
+  noEmit: true,
+  skipLibCheck: true,
+  strict: true,
+  target: ts.ScriptTarget.ES2022,
+  typeRoots: [join(root, "node_modules", "@types")],
+  types: ["node"],
+};
+
+/** Replaces the timestamp so documented and real output lines compare equal. */
+function normalizeOutput(line: string): string {
+  return line.replace(/"timestamp":"[^"]+"/, '"timestamp":"<timestamp>"');
+}
+
+/** The `// console.<method>: <line>` comments of an example, timestamps normalized. */
+export function documentedOutput(code: string): string[] {
+  return [...code.matchAll(/^\/\/ (console\.\w+: .+)$/gm)].map(([, line]) => normalizeOutput(line ?? ""));
+}
+
+const consoleShim =
+  'for (const method of ["debug", "info", "warn", "error"]) console[method] = (line) => process.stdout.write(`console.${method}: ${line}\\n`);\n';
+
+/**
+ * Runs a TypeScript example as an ES module in `project`, with `LOG_LEVEL`
+ * unset, and returns the lines it prints. Console methods print
+ * `console.<method>: <line>`; timestamps are normalized.
+ */
+export function runExample(project: string, fileName: string, code: string): string[] {
+  const file = join(project, fileName);
+  const { outputText } = ts.transpileModule(code, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  });
+  writeFileSync(file, consoleShim + outputText);
+  const output = execFileSync(process.execPath, [file], {
+    cwd: project,
+    encoding: "utf8",
+    env: { ...process.env, LOG_LEVEL: "" },
+    timeout: 20_000,
+  });
+  return output.split("\n").map(normalizeOutput);
 }

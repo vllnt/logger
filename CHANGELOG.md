@@ -49,6 +49,12 @@ All notable changes to this project are documented here. The format follows
   quick start, an API table of every export, common tasks, errors and fixes, limits and gotchas,
   and compatibility. Every TypeScript example is complete and is type-checked and run against
   the built package in tests. `llms.txt` carries the same summary and links to the package page.
+- README adds a `## Links` section (package page, release feed, package index and search, source,
+  issues, npm, community, author and sponsor links) and states that no other @vllnt package
+  works with this one in code. `llms.txt` ends with the shared ecosystem block, which adds the
+  release feed and package search links.
+- `docs/API.md` examples are type-checked and run against the built package, like the README
+  examples.
 - `package.json`: new `description` and `keywords`, `author` as an object, and new `funding` and
   `bugs` fields. `createBackendLogger` TSDoc links the package page.
 - Built with tsup 9 and TypeScript 6. The `.d.ts` files of the subpaths and the shared core use

@@ -1,19 +1,22 @@
 /**
  * Agent-first docs contract: package metadata, the README section layout shared by
  * every @vllnt package, complete code examples checked against the built package,
- * an API table and an errors table that cover the code, the footer and llms.txt
- * backlinks, and no mention of the retired `.ai` domain in anything shipped.
+ * an API table and an errors table that match the code and real consumer setups,
+ * the Links block, footer and llms.txt ecosystem block, descriptive link text,
+ * related packages, and no mention of the retired `.ai` domain in anything shipped.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
 
 import {
   anchorsOf,
   codeBlocks,
+  consumerOptions,
+  createConsumerProject,
   docSummary,
+  documentedOutput,
   entries,
   exportsOf,
   exportSymbols,
@@ -22,6 +25,7 @@ import {
   packedFiles,
   read,
   root,
+  runExample,
   typeCheck,
 } from "./docs-helpers.js";
 
@@ -40,7 +44,21 @@ const requiredSections = [
   "Limits and gotchas",
   "Compatibility",
 ];
-const trailingSections = ["Testing", "Security", "Related packages", "Contributing", "License"];
+const trailingSections = ["Testing", "Security", "Related packages", "Contributing", "Links", "License"];
+
+const repoUrl = `https://github.com/vllnt/${name}`;
+
+const links = [
+  "## Links",
+  "",
+  `- Docs and changelog: [oss.vllnt.com/packages/${name}](https://oss.vllnt.com/packages/${name}) · [release feed](https://oss.vllnt.com/packages/${name}/rss.xml)`,
+  "- All @vllnt packages: [oss.vllnt.com](https://oss.vllnt.com) · [search packages and docs on index.vllnt.com](https://index.vllnt.com)",
+  `- Source and issues: [GitHub](${repoUrl}) · [issues](${repoUrl}/issues) · [npm](https://www.npmjs.com/package/@vllnt/${name})`,
+  "- Questions and updates: [Discord](https://bntvllnt.com/discord) · [X @bntvllnt](https://x.com/bntvllnt)",
+  "- Company and author: [vllnt.com](https://vllnt.com) · [bntvllnt.com](https://bntvllnt.com) · [GitHub @bntvllnt](https://github.com/bntvllnt) · [LinkedIn](https://linkedin.com/in/bntvllnt)",
+  "- Sponsor: [GitHub Sponsors](https://github.com/sponsors/bntvllnt)",
+  "",
+].join("\n");
 
 const footer = [
   "---",
@@ -53,7 +71,9 @@ const llmsEcosystem = [
   "## Ecosystem",
   "",
   `- [Package page](https://oss.vllnt.com/packages/${name})`,
+  `- [Release feed](https://oss.vllnt.com/packages/${name}/rss.xml)`,
   "- [All @vllnt packages](https://oss.vllnt.com/llms.txt)",
+  "- [Search vllnt packages and docs](https://index.vllnt.com)",
   "- [vllnt](https://vllnt.com/llms.txt)",
   "- [Author](https://bntvllnt.com)",
   "",
@@ -141,8 +161,35 @@ describe("README.md layout", () => {
     expect(lines.slice(0, quickStart).join("\n")).not.toMatch(/!\[|shields\.io|badge/i);
   });
 
+  it("has the shared Links block just before License", () => {
+    expect(readme).toContain(`\n${links}\n## License\n`);
+  });
+
   it("ends with the shared footer", () => {
     expect(readme.endsWith(`\n${footer}`)).toBe(true);
+  });
+});
+
+/** Links whose text does not describe the target, and images without alt text. */
+function vagueLinks(markdown: string): string[] {
+  const text = markdown.replace(/^```[\s\S]*?^```/gm, "");
+  const vague = new Set(["here", "this", "link", "click here"]);
+  const links = [...text.matchAll(/(!?)\[([^\]]*)\]\([^)\s]+\)/g)].filter(([, image, label = ""]) =>
+    image ? label.trim() === "" : vague.has(label.replace(/`/g, "").trim().toLowerCase()),
+  );
+  const images = [...text.matchAll(/<img\b(?![^>]*\balt="[^"]+")[^>]*>/gi)];
+  return [...links, ...images].map(([match]) => match);
+}
+
+describe("link text and images", () => {
+  it("flags vague link text and images without alt text", () => {
+    expect(
+      vagueLinks('[here](https://a.example) [Click here](./b.md) ![](c.png) <img src="d.png"> [GitHub](https://e.example) ![logo](f.png)'),
+    ).toEqual(["[here](https://a.example)", "[Click here](./b.md)", "![](c.png)", '<img src="d.png">']);
+  });
+
+  it.each(["README.md", "llms.txt", "docs/API.md"])("%s has descriptive link text and alt text", (file) => {
+    expect(vagueLinks(read(file))).toEqual([]);
   });
 });
 
@@ -203,6 +250,27 @@ describe("README.md API and errors", () => {
       expect(linked.map(([, pkg]) => pkg)).toEqual(mentions);
     },
   );
+
+  it("lists in Related packages only the None line or @vllnt packages this one works with in code", () => {
+    const none =
+      "None. No other @vllnt package is a dependency of this one or shares code, a test or an example with it.";
+    const body = section("Related packages").trim();
+    const listed = body === none ? [] : body.split("\n");
+    const dependencies = ["dependencies", "devDependencies", "peerDependencies"].flatMap((field) => {
+      const value = manifest[field];
+      return typeof value === "object" && value !== null ? Object.keys(value) : [];
+    });
+    const imports = [
+      ...readdirSync(join(root, "tests")).map((file) => read(`tests/${file}`)),
+      ...["README.md", "docs/API.md"].flatMap((file) => codeBlocks(read(file)).map((block) => block.code)),
+    ].flatMap((code) => [...code.matchAll(/from "(@vllnt\/[\w-]+)/g)].map(([, pkg]) => pkg));
+    const inCode = new Set([...dependencies, ...imports]);
+    for (const line of listed) {
+      const pkg = /^- \[`@vllnt\/([\w-]+)`\]\(https:\/\/oss\.vllnt\.com\/packages\/\1\): \S/.exec(line)?.[1];
+      expect(pkg, `${line}: links https://oss.vllnt.com/packages/<other> and says how they work together`).toBeDefined();
+      expect([...inCode], `${line}: shares a dependency, test or example with this package`).toContain(`@vllnt/${pkg}`);
+    }
+  });
 
   it("documents every message marker the sources can write", () => {
     const sources = entries.map((entry) => entry.source).concat("src/core.ts");
@@ -302,14 +370,7 @@ describe.skipIf(!existsSync(join(root, "dist")) && !process.env.CI)("README exam
   let project = "";
 
   beforeAll(() => {
-    project = mkdtempSync(join(tmpdir(), "logger-readme-"));
-    writeFileSync(join(project, "package.json"), '{ "type": "module" }\n');
-    mkdirSync(join(project, "node_modules", "@vllnt"), { recursive: true });
-    symlinkSync(root, join(project, "node_modules", "@vllnt", "logger"));
-    symlinkSync(
-      realpathSync(join(root, "node_modules", "posthog-node")),
-      join(project, "node_modules", "posthog-node"),
-    );
+    project = createConsumerProject("logger-readme-");
   });
 
   afterAll(() => {
@@ -321,23 +382,8 @@ describe.skipIf(!existsSync(join(root, "dist")) && !process.env.CI)("README exam
     const files = new Map(
       blocks.map((block) => [join(project, `readme-${block.startLine}.ts`), `export {};\n${block.code}`]),
     );
-    const diagnostics = typeCheck(files, {
-      exactOptionalPropertyTypes: true,
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      noEmit: true,
-      skipLibCheck: true,
-      strict: true,
-      target: ts.ScriptTarget.ES2022,
-      typeRoots: [join(root, "node_modules", "@types")],
-      types: ["node"],
-    });
-    expect(diagnostics).toEqual([]);
+    expect(typeCheck(files, consumerOptions)).toEqual([]);
   }, 60_000);
-
-  /** Replaces the timestamp so documented and real output lines compare equal. */
-  const normalize = (line: string): string =>
-    line.replace(/"timestamp":"[^"]+"/, '"timestamp":"<timestamp>"');
 
   it("run and print what their // console.<method>: comments show", () => {
     const runnable = blocks.filter((block) =>
@@ -346,25 +392,12 @@ describe.skipIf(!existsSync(join(root, "dist")) && !process.env.CI)("README exam
       ),
     );
     expect(runnable.length).toBeGreaterThan(0);
-    const consoleShim =
-      'for (const method of ["debug", "info", "warn", "error"]) console[method] = (line) => process.stdout.write(`console.${method}: ${line}\\n`);\n';
     let documented = 0;
     for (const block of runnable) {
-      const file = join(project, `readme-${block.startLine}.mjs`);
-      const { outputText } = ts.transpileModule(block.code, {
-        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-      });
-      writeFileSync(file, consoleShim + outputText);
-      const output = execFileSync(process.execPath, [file], {
-        cwd: project,
-        encoding: "utf8",
-        env: { ...process.env, LOG_LEVEL: "" },
-        timeout: 20_000,
-      });
-      const printed = output.split("\n").map(normalize);
-      for (const [, expected] of block.code.matchAll(/^\/\/ (console\.\w+: .+)$/gm)) {
+      const printed = runExample(project, `readme-${block.startLine}.mjs`, block.code);
+      for (const expected of documentedOutput(block.code)) {
         documented += 1;
-        expect(printed, `README.md:${block.startLine}`).toContain(normalize(expected ?? ""));
+        expect(printed, `README.md:${block.startLine}`).toContain(expected);
       }
     }
     expect(documented).toBeGreaterThan(0);
@@ -376,8 +409,12 @@ describe.skipIf(!existsSync(join(root, "dist")) && !process.env.CI)("README exam
     );
   });
 
-  it("list every error a consumer setup really produces", () => {
-    const errors = section("Errors and fixes");
+  /** A CommonJS consumer file importing the package. */
+  const consumer = (): Map<string, string> =>
+    new Map([[join(project, "consumer.cts"), 'import { createLogger } from "@vllnt/logger";\nvoid createLogger;\n']]);
+
+  it("list exactly the errors the consumer setups really produce, in both directions", () => {
+    const produced = new Set<string>();
     const required = spawnSync(
       process.execPath,
       ["--input-type=commonjs", "-e", 'require("@vllnt/logger")'],
@@ -385,11 +422,8 @@ describe.skipIf(!existsSync(join(root, "dist")) && !process.env.CI)("README exam
     );
     const nodeCode = /\b(ERR_[A-Z_]+)\b/.exec(required.stderr)?.[1];
     expect(nodeCode, required.stderr).toBeDefined();
-    expect(errors).toContain(nodeCode);
+    produced.add(nodeCode ?? "");
 
-    const consumer = new Map([
-      [join(project, "consumer.cts"), 'import { createLogger } from "@vllnt/logger";\nvoid createLogger;\n'],
-    ]);
     const setups: ts.CompilerOptions[] = [
       { module: ts.ModuleKind.Node16, moduleResolution: ts.ModuleResolutionKind.Node16 },
       { module: ts.ModuleKind.CommonJS, moduleResolution: ts.ModuleResolutionKind.Node10 },
@@ -400,13 +434,26 @@ describe.skipIf(!existsSync(join(root, "dist")) && !process.env.CI)("README exam
       },
     ];
     for (const setup of setups) {
-      const codes = typeCheck(consumer, { ...setup, noEmit: true, types: [] }).map(
+      const codes = typeCheck(consumer(), { ...setup, noEmit: true, types: [] }).map(
         (diagnostic) => /TS\d+/.exec(diagnostic)?.[0] ?? diagnostic,
       );
       expect(codes.length, JSON.stringify(setup)).toBeGreaterThan(0);
-      for (const code of codes) {
-        expect(errors, `Errors and fixes lists ${code}`).toContain(code);
-      }
+      for (const code of codes) produced.add(code);
     }
+
+    const listed = new Set([...section("Errors and fixes").matchAll(/\b(ERR_[A-Z_]+|TS\d+)\b/g)].map(([, code]) => code));
+    expect([...produced].filter((code) => !listed.has(code)), "produced but not in Errors and fixes").toEqual([]);
+    expect([...listed].filter((code) => !produced.has(code ?? "")), "in Errors and fixes but not produced").toEqual([]);
+  }, 60_000);
+
+  it("type-check a CommonJS (.cts) consumer under NodeNext with no diagnostics, as Compatibility says", () => {
+    expect(section("Compatibility")).toContain("in a CommonJS project, `nodenext` type-checks");
+    const diagnostics = typeCheck(consumer(), {
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      noEmit: true,
+      types: [],
+    });
+    expect(diagnostics).toEqual([]);
   }, 60_000);
 });

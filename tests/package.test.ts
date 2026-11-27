@@ -1,15 +1,18 @@
 /**
  * Checks what `npm pack` would publish: the bundled agent docs ship, contributor
  * files do not, relative links and anchors in shipped docs resolve inside the
- * tarball, and docs/API.md names every public export with examples that type-check.
+ * tarball, and docs/API.md names every public export with examples that type-check
+ * and run against the built package.
  */
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import ts from "typescript";
 
 import {
   anchorsOf,
   codeBlocks,
+  consumerOptions,
+  createConsumerProject,
+  documentedOutput,
   entries,
   exportsOf,
   exportTargets,
@@ -18,11 +21,22 @@ import {
   read,
   relativeLinks,
   root,
+  runExample,
   shippedDocs,
   typeCheck,
 } from "./docs-helpers.js";
 
 const packed = packedFiles();
+
+/** Types the docs/API.md examples' placeholders are checked with. */
+const placeholderTypes: Record<string, string> = {
+  apiKey: "string",
+  distinctId: "string",
+  expect: 'typeof import("vitest").expect',
+  fetchRows: "() => Promise<unknown[]>",
+  orderId: "string",
+  posthog: "{ capture: (event: string, properties?: Record<string, unknown>) => void }",
+};
 const entrySources = entries.map((entry) => entry.source);
 
 describe("package contents", () => {
@@ -99,53 +113,11 @@ describe("docs/API.md", () => {
     },
   );
 
-  /** Types the examples' placeholders are checked with. */
-  const placeholderTypes: Record<string, string> = {
-    apiKey: "string",
-    distinctId: "string",
-    expect: 'typeof import("vitest").expect',
-    fetchRows: "() => Promise<unknown[]>",
-    orderId: "string",
-    posthog: "{ capture: (event: string, properties?: Record<string, unknown>) => void }",
-  };
-
   it("names every placeholder the examples use", () => {
     const note = /^Examples use[\s\S]*?(?=\n\n)/m.exec(api)?.[0] ?? "";
     const named = [...note.matchAll(/`(\w+)`/g)].map((match) => match[1]);
     expect(named.sort()).toEqual(Object.keys(placeholderTypes).sort());
   });
-
-  /** A full type-check takes seconds on a loaded host, hence the long timeout. */
-  it("type-checks every example against the sources", () => {
-    const declarations = Object.entries(placeholderTypes)
-      .map(([name, type]) => `declare const ${name}: ${type};`)
-      .join("\n");
-    const examples = codeBlocks(api)
-      .filter((block) => block.lang === "ts" && /^import /m.test(block.code))
-      .map((block) => block.code);
-    expect(examples.length).toBeGreaterThan(0);
-    const files = new Map(
-      examples.map((code, index) => [
-        join(root, `docs-example-${index}.ts`),
-        `${declarations}\nexport {};\n${code}`,
-      ]),
-    );
-    const diagnostics = typeCheck(files, {
-      exactOptionalPropertyTypes: true,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      noEmit: true,
-      paths: {
-        "@vllnt/logger": [join(root, "src/index.ts")],
-        "@vllnt/logger/*": [join(root, "src/*.ts")],
-      },
-      skipLibCheck: true,
-      strict: true,
-      target: ts.ScriptTarget.ES2022,
-      types: ["node"],
-    });
-    expect(diagnostics).toEqual([]);
-  }, 60_000);
 
   it.each(entries)(
     "documents exactly the exports of $specifier",
@@ -165,4 +137,49 @@ describe("docs/API.md", () => {
       expect([...documented].sort()).toEqual(exported.sort());
     },
   );
+});
+
+/**
+ * docs/API.md examples against the built package as a consumer sees it, the same
+ * way as the README examples, with the placeholders declared.
+ */
+describe.skipIf(!existsSync(join(root, "dist")) && !process.env.CI)("docs/API.md examples against the built package", () => {
+  const blocks = codeBlocks(read("docs/API.md")).filter(
+    (block) => block.lang === "ts" && /^import /m.test(block.code),
+  );
+  let project = "";
+
+  beforeAll(() => {
+    project = createConsumerProject("logger-api-");
+  });
+
+  afterAll(() => {
+    if (project) rmSync(project, { force: true, recursive: true });
+  });
+
+  /** A full type-check takes seconds on a loaded host, hence the long timeout. */
+  it("type-check", () => {
+    expect(blocks.length).toBeGreaterThan(0);
+    const declarations = Object.entries(placeholderTypes)
+      .map(([placeholder, type]) => `declare const ${placeholder}: ${type};`)
+      .join("\n");
+    const files = new Map(
+      blocks.map((block) => [
+        join(project, `api-${block.startLine}.ts`),
+        `${declarations}\nexport {};\n${block.code}`,
+      ]),
+    );
+    expect(typeCheck(files, consumerOptions)).toEqual([]);
+  }, 60_000);
+
+  it("run and print what their // console.<method>: comments show", () => {
+    const documented = blocks.filter((block) => documentedOutput(block.code).length > 0);
+    expect(documented.length).toBeGreaterThan(0);
+    for (const block of documented) {
+      const printed = runExample(project, `api-${block.startLine}.mjs`, block.code);
+      for (const expected of documentedOutput(block.code)) {
+        expect(printed, `docs/API.md:${block.startLine}`).toContain(expected);
+      }
+    }
+  }, 120_000);
 });

@@ -28,6 +28,8 @@ All notable changes to this project are documented here. The format follows
 - `createPostHogOutput` swallows rejected promises returned by `capture` instead of leaving an
   unhandled rejection. `PostHogCapture` now accepts functions returning any value.
 - `withTiming` logs a placeholder when a thrown value cannot be converted to a string.
+- `withTiming` and `withTimingSync` no longer throw when `extraData` has a throwing getter: they
+  return the result or rethrow the original error, and drop only the entries that cannot be built.
 - `docs/API.md`: the posthog-node wrapper now type-checks under `exactOptionalPropertyTypes`
   (`(event, properties = {}) => client.capture({ distinctId, event, properties })`), and the
   placeholder note names every placeholder. Tests type-check every example against the sources

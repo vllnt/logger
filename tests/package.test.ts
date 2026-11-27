@@ -25,18 +25,19 @@ function isExportTarget(value: unknown): value is ExportTarget {
   );
 }
 
-function readExportTargets(): ExportTarget[] {
+function readExportTargets(): [string, ExportTarget][] {
   const manifest: unknown = JSON.parse(
     readFileSync(join(root, "package.json"), "utf8"),
   );
   if (!isRecord(manifest) || !isRecord(manifest.exports)) {
     throw new Error("package.json has no exports map");
   }
-  const targets = Object.values(manifest.exports);
-  if (!targets.every(isExportTarget)) {
-    throw new Error("every exports entry needs import and types");
-  }
-  return targets;
+  return Object.entries(manifest.exports).map(([subpath, target]) => {
+    if (!isExportTarget(target)) {
+      throw new Error(`exports["${subpath}"] needs import and types`);
+    }
+    return [subpath, target];
+  });
 }
 
 function packedFiles(): Set<string> {
@@ -59,9 +60,11 @@ function packedFiles(): Set<string> {
 
 const exportTargets = readExportTargets();
 const packed = packedFiles();
-const entrySources = exportTargets.map((entry) =>
-  entry.import.replace(/^\.\/dist\/(.+)\.js$/, "src/$1.ts"),
-);
+const entries = exportTargets.map(([subpath, target]) => ({
+  source: target.import.replace(/^\.\/dist\/(.+)\.js$/, "src/$1.ts"),
+  specifier: `@vllnt/logger${subpath.slice(1)}`,
+}));
+const entrySources = entries.map((entry) => entry.source);
 
 describe("package contents", () => {
   it.each([
@@ -80,7 +83,7 @@ describe("package contents", () => {
   it.skipIf(!existsSync(join(root, "dist")))(
     "ships every exports target (needs a build)",
     () => {
-      for (const entry of exportTargets) {
+      for (const [, entry] of exportTargets) {
         expect(packed).toContain(entry.import.replace(/^\.\//, ""));
         expect(packed).toContain(entry.types.replace(/^\.\//, ""));
       }
@@ -96,16 +99,19 @@ describe("package contents", () => {
     expect(internal).toEqual([]);
   });
 
-  it("resolves every relative link in llms.txt inside the package", () => {
-    const llms = readFileSync(join(root, "llms.txt"), "utf8");
-    const links = [...llms.matchAll(/\]\(([^)]+)\)/g)]
-      .map((match) => match[1] ?? "")
-      .filter((href) => !/^[a-z]+:/i.test(href));
-    expect(links.length).toBeGreaterThan(0);
-    for (const href of links) {
-      expect(packed).toContain(normalize(href));
-    }
-  });
+  it.each(["llms.txt", "README.md"])(
+    "resolves every relative link in %s inside the package",
+    (file) => {
+      const text = readFileSync(join(root, file), "utf8");
+      const links = [...text.matchAll(/\]\(([^)]+)\)/g)]
+        .map((match) => match[1] ?? "")
+        .filter((href) => !/^[a-z]+:/i.test(href));
+      expect(links.length).toBeGreaterThan(0);
+      for (const href of links) {
+        expect(packed).toContain(normalize(href));
+      }
+    },
+  );
 });
 
 describe("docs/API.md", () => {
@@ -119,20 +125,29 @@ describe("docs/API.md", () => {
   );
   const checker = program.getTypeChecker();
 
-  it.each(entrySources)("documents every export of %s", (file) => {
-    const source = program.getSourceFile(join(root, file));
-    const moduleSymbol = source && checker.getSymbolAtLocation(source);
-    if (!moduleSymbol) {
-      throw new Error(`cannot read exports of ${file}`);
-    }
-    const names = checker
-      .getExportsOfModule(moduleSymbol)
-      .map((exported) => exported.getName());
-    expect(names.length).toBeGreaterThan(0);
-    for (const name of names) {
-      expect(api, `${name} missing from docs/API.md`).toMatch(
-        new RegExp(`\`${name}[\`(]`),
+  it.each(entries)(
+    "documents exactly the exports of $specifier",
+    ({ source, specifier }) => {
+      const file = program.getSourceFile(join(root, source));
+      const moduleSymbol = file && checker.getSymbolAtLocation(file);
+      if (!moduleSymbol) {
+        throw new Error(`cannot read exports of ${source}`);
+      }
+      const exported = checker
+        .getExportsOfModule(moduleSymbol)
+        .map((symbol) => symbol.getName());
+      const header = `## \`${specifier}\`\n`;
+      const start = api.indexOf(header);
+      expect(start, `docs/API.md has no "${header.trim()}" section`).not.toBe(-1);
+      const end = api.indexOf("\n## ", start + header.length);
+      const section = api.slice(start, end === -1 ? undefined : end);
+      const documented = new Set(
+        [
+          ...section.matchAll(/^### `(\w+)/gm),
+          ...section.matchAll(/^type (\w+) =/gm),
+        ].map((match) => match[1]),
       );
-    }
-  });
+      expect([...documented].sort()).toEqual(exported.sort());
+    },
+  );
 });

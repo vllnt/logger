@@ -173,7 +173,7 @@ type LoggerConfig = { getLogLevel: () => LogLevel; output: LogOutput };
 ## Related packages
 
 - [`@vllnt/analytics`](https://oss.vllnt.com/packages/analytics): product analytics with consent
-  management in the browser. Use it for user behaviour; use this logger for operational logs.
+  management. Use it for user behaviour; use this logger for operational logs.
 - [`@vllnt/convex-events`](https://oss.vllnt.com/packages/convex-events): an append-only activity
   feed stored in Convex. Use it when entries must be stored and queried later; this logger only
   writes to outputs such as the console.

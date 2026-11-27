@@ -12,7 +12,8 @@ All notable changes to this project are documented here. The format follows
   `CHANGELOG.md` and the TypeScript sources in `src/`, so coding agents can read docs that match
   the installed version from `node_modules/@vllnt/logger/`. `llms.txt` links the shipped files
   with relative paths.
-- `package.json` sets `homepage` and `keywords`.
+- README notes the bundled docs for coding agents and lists related packages.
+- `package.json` sets `homepage` and `keywords`. Docs-only changes on `main` now publish a canary.
 
 ### Fixed
 

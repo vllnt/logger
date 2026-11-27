@@ -256,10 +256,13 @@ describe("README.md API and errors", () => {
       "None. This package has no runtime or peer dependencies, and no other @vllnt package shares code, a test or an example with it.";
     const body = section("Related packages").trim();
     const listed = body === none ? [] : body.split("\n");
-    const dependencies = ["dependencies", "devDependencies", "peerDependencies"].flatMap((field) => {
+    const namesIn = (field: string): string[] => {
       const value = manifest[field];
       return typeof value === "object" && value !== null ? Object.keys(value) : [];
-    });
+    };
+    const runtime = ["dependencies", "peerDependencies"].flatMap(namesIn);
+    expect(body === none ? runtime : [], "the None line says there are no runtime or peer dependencies").toEqual([]);
+    const dependencies = ["dependencies", "devDependencies", "peerDependencies"].flatMap(namesIn);
     const imports = [
       ...readdirSync(join(root, "tests")).map((file) => read(`tests/${file}`)),
       ...["README.md", "docs/API.md"].flatMap((file) => codeBlocks(read(file)).map((block) => block.code)),

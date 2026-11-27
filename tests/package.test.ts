@@ -1,8 +1,9 @@
 /**
  * Checks what `npm pack` would publish: the bundled agent docs ship, contributor
  * files do not, relative links and anchors in shipped docs resolve inside the
- * tarball, and docs/API.md names every public export with examples that type-check
- * and run against the built package.
+ * tarball, and docs/API.md names every public export. Every docs/API.md block that
+ * imports a package is type-checked against the built package; only blocks with
+ * `// console.` comments also run.
  */
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";

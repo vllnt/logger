@@ -52,8 +52,9 @@ All notable changes to this project are documented here. The format follows
   `// console.` comments is compared with what they print. `llms.txt` carries the same summary
   and links to the package page.
 - README adds a `## Links` section (package page, release feed, package index and search, source,
-  issues, npm, community, author and sponsor links) and states that no other @vllnt package
-  works with this one in code. `llms.txt` ends with the shared ecosystem block, which adds the
+  issues, npm, community, author and sponsor links). Its `## Related packages` section states that
+  the package has no runtime or peer dependencies and that no other @vllnt package shares code, a
+  test or an example with it. `llms.txt` ends with the shared ecosystem block, which adds the
   release feed and package search links.
 - `docs/API.md` examples (the code blocks that import a package) are type-checked against the
   built package, with posthog-node 6 for the posthog-node wrapper; examples that show output in

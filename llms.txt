@@ -1,29 +1,37 @@
 # @vllnt/logger
 
-> Small structured logging package for the @vllnt ecosystem. Emits JSON log entries, has zero runtime dependencies, and never throws from a log call.
+> Zero-dependency structured JSON logger for TypeScript with scoped events, log levels, timing, and console, PostHog and test outputs for Node.js and Convex.
 
-Scoped events (`auth.login`), levels `debug`, `info`, `warn`, `error`, and pluggable synchronous outputs. The Node.js backend preset reads `LOG_LEVEL` from `process.env` on each call and defaults to `warn`. There is no built-in redaction. ESM only.
+Scoped events (`auth.login`), levels `debug`, `info`, `warn`, `error`, and pluggable synchronous outputs. Log calls never throw. The Node.js preset `createBackendLogger` reads `LOG_LEVEL` from `process.env` on each call and defaults to `warn`. There is no built-in redaction. ESM only; TypeScript `moduleResolution` must be `nodenext`, `node16` or `bundler`.
 
 ## For coding agents
 
 The docs are bundled in the package at `node_modules/@vllnt/logger/docs/`, with the TypeScript sources in `node_modules/@vllnt/logger/src/`. They match the installed version. Read them before writing code.
 
+## When to use
+
+- Use it when you want one JSON line per event, with a scoped event name, from TypeScript.
+- Use it when the same logger API must run in Node.js and in Convex queries, mutations and actions.
+- Use it when log entries should go to several outputs, such as the console and PostHog.
+- Use it when tests should assert on log entries instead of console output.
+- Do not use it when you need log transports, files, rotation, redaction or async batching: use pino or winston.
+- Do not use it when entries must be stored and queried later: use `@vllnt/convex-events`.
+- Do not use it for product analytics with consent: use `@vllnt/analytics`.
+
 ## Docs
 
 - [API Reference](./docs/API.md): Every public export, its signature and an example, per entry point
-- [README](./README.md): Install, quick start, entry points and design decisions
+- [Errors and fixes](./README.md#errors-and-fixes): Every error message and marker, its cause and the fix
+- [Limits and gotchas](./README.md#limits-and-gotchas): Defaults and calls that silently do nothing
+- [README](./README.md): Install, quick start, API table, common tasks and compatibility
 - [Changelog](./CHANGELOG.md): Version history and release notes
 
 ## Entry points
 
-- `@vllnt/logger`: core API and Node.js backend preset (`createBackendLogger`)
+- `@vllnt/logger`: core API and Node.js preset (`createBackendLogger`)
 - `@vllnt/logger/convex`: `createConvexLogger`, no `process.env` access
 - `@vllnt/logger/posthog`: `createPostHogOutput`
 - `@vllnt/logger/testing`: `createTestOutput`
-
-## Ecosystem
-
-- [vllnt oss](https://oss.vllnt.com/llms.txt): Index of all @vllnt open-source packages
 
 ## Optional
 
@@ -31,3 +39,10 @@ The docs are bundled in the package at `node_modules/@vllnt/logger/docs/`, with 
 - [AGENTS](https://github.com/vllnt/logger/blob/main/AGENTS.md): Agent instructions for working on this repository (not shipped in the package)
 - [Security Policy](https://github.com/vllnt/logger/blob/main/SECURITY.md): Vulnerability reporting
 - [License](./LICENSE): MIT
+
+## Ecosystem
+
+- [Package page](https://oss.vllnt.com/packages/logger)
+- [All @vllnt packages](https://oss.vllnt.com/llms.txt)
+- [vllnt](https://vllnt.com/llms.txt)
+- [Author](https://bntvllnt.com)

@@ -47,7 +47,7 @@ import { createBackendLogger } from "@vllnt/logger";
 
 const logger = createBackendLogger("payments");
 logger.warn("charge.declined", { amount: 99 });
-// console.warn: {"amount":99,"event":"payments.charge.declined","level":"warn","timestamp":"..."}
+// console.warn: {"amount":99,"event":"payments.charge.declined","level":"warn","timestamp":"2026-11-27T12:00:00.000Z"}
 ```
 
 ### `createLogger(scope: string, config: LoggerConfig): Logger`
@@ -120,7 +120,7 @@ Builds an entry: `{ ...data, event, level, timestamp }`. It does not add a scope
 import { formatLogEntry } from "@vllnt/logger";
 
 formatLogEntry("info", "cache.hit", { key: "user:1" });
-// { key: "user:1", event: "cache.hit", level: "info", timestamp: "2026-…Z" }
+// { key: "user:1", event: "cache.hit", level: "info", timestamp: "2026-11-27T12:00:00.000Z" }
 ```
 
 ### `parseLogLevel(value: string | undefined, defaultLevel?: LogLevel): LogLevel`

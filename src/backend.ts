@@ -26,7 +26,12 @@ function getBackendLogLevel(): LogLevel {
   return parseLogLevel(getEnvironmentVariable("LOG_LEVEL"), "warn");
 }
 
-/** Create a scoped backend logger. Reads LOG_LEVEL from process.env on each call. */
+/**
+ * Create a scoped Node.js logger that writes with `consoleOutput`. Reads
+ * `LOG_LEVEL` from `process.env` on each call; the default is `warn`.
+ *
+ * @see https://oss.vllnt.com/packages/logger
+ */
 export function createBackendLogger(scope: string): ExtendedLogger {
   return createExtendedLogger(scope, {
     getLogLevel: getBackendLogLevel,

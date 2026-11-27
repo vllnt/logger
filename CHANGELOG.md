@@ -43,6 +43,12 @@ All notable changes to this project are documented here. The format follows
   pinned to commit SHAs, the workflow token is read-only by default, and pnpm is pinned to 10.34.8
   with a seven-day minimum release age.
 - README documents the release flow, serialization behaviour and that there is no built-in redaction.
+- README follows the section layout shared by @vllnt packages, for coding agents: when to use,
+  quick start, an API table of every export, common tasks, errors and fixes, limits and gotchas,
+  and compatibility. Every TypeScript example is complete and is type-checked and run against
+  the built package in tests. `llms.txt` carries the same summary and links to the package page.
+- `package.json`: new `description` and `keywords`, `author` as an object, and new `funding` and
+  `bugs` fields. `createBackendLogger` TSDoc links the package page.
 - Built with tsup 9 and TypeScript 6. The `.d.ts` files of the subpaths and the shared core use
   `export type { … }`, and the subpath declarations import shared types from `./index.js`. The
   toolchain change does not change the types consumers see.

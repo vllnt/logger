@@ -1,7 +1,7 @@
 /**
- * @vllnt/logger — Structured logging for the @vllnt ecosystem.
+ * @vllnt/logger — zero-dependency structured JSON logger for TypeScript.
  *
- * Core exports + backend preset.
+ * Core exports + Node.js preset (`createBackendLogger`).
  */
 
 export { createBackendLogger } from "./backend.js";

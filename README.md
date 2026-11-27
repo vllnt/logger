@@ -10,6 +10,12 @@ Zero runtime dependencies. Tree-shakeable. Works in Node.js, Convex, browser, an
 pnpm add @vllnt/logger
 ```
 
+## For coding agents
+
+The docs are bundled in the package: `node_modules/@vllnt/logger/docs/API.md` (every export,
+its signature and an example), `llms.txt`, `CHANGELOG.md` and the TypeScript sources in
+`node_modules/@vllnt/logger/src/`. They match the installed version. Read them before writing code.
+
 ## Quick Start
 
 ```ts
@@ -35,6 +41,8 @@ Set `LOG_LEVEL` env var to control verbosity (`debug`, `info`, `warn`, `error`).
 | `@vllnt/logger/testing` | In-memory test output for assertions  |
 
 ## API
+
+Full reference: [docs/API.md](docs/API.md).
 
 ### `createBackendLogger(scope): ExtendedLogger`
 
@@ -162,6 +170,14 @@ type LoggerConfig = { getLogLevel: () => LogLevel; output: LogOutput };
 - **Lazy level evaluation**: `getLogLevel()` is called per-emit, so env changes are picked up without restart
 - **Zero side effects**: Core module has zero module-level side effects (`sideEffects: false`)
 
+## Related packages
+
+- [`@vllnt/analytics`](https://oss.vllnt.com/packages/analytics): product analytics with consent
+  management. Use it for user behaviour; use this logger for operational logs.
+- [`@vllnt/convex-events`](https://oss.vllnt.com/packages/convex-events): an append-only activity
+  feed stored in Convex. Use it when entries must be stored and queried later; this logger only
+  writes to outputs such as the console.
+
 ## Releases
 
 Every publish runs in `.github/workflows/publish.yml` with npm trusted publishing and provenance;
@@ -175,3 +191,7 @@ nothing is published from a local machine. Maintainers only.
 ## License
 
 [MIT](LICENSE)
+
+---
+
+Part of vllnt oss: https://oss.vllnt.com

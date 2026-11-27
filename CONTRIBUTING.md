@@ -28,7 +28,7 @@ CI runs the same four checks on every pull request.
 - Use conventional commits: `feat(scope):`, `fix(scope):`, `chore(scope):`
 - Keep PRs focused: one change per PR
 - Add or update tests for behavior changes
-- Document public API changes in `README.md` and `CHANGELOG.md`
+- Document public API changes in `README.md`, `docs/API.md`, `CHANGELOG.md` and `llms.txt`
 
 ## Design constraints
 

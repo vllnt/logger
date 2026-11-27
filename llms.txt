@@ -2,14 +2,17 @@
 
 > Small structured logging package for the @vllnt ecosystem. Emits JSON log entries, has zero runtime dependencies, and never throws from a log call.
 
-Scoped events (`auth.login`), levels `debug`, `info`, `warn`, `error`, and pluggable synchronous outputs. The Node.js backend preset reads `LOG_LEVEL` from `process.env` on each call and defaults to `warn`. There is no built-in redaction.
+Scoped events (`auth.login`), levels `debug`, `info`, `warn`, `error`, and pluggable synchronous outputs. The Node.js backend preset reads `LOG_LEVEL` from `process.env` on each call and defaults to `warn`. There is no built-in redaction. ESM only.
+
+## For coding agents
+
+The docs are bundled in the package at `node_modules/@vllnt/logger/docs/`, with the TypeScript sources in `node_modules/@vllnt/logger/src/`. They match the installed version. Read them before writing code.
 
 ## Docs
 
-- [README](README.md): Install, API, entry points and design decisions
-- [Contributing](CONTRIBUTING.md): Development setup and release flow
-- [Changelog](CHANGELOG.md): Version history and release notes
-- [Agents](AGENTS.md): AI agent instructions for this codebase
+- [API Reference](./docs/API.md): Every public export, its signature and an example, per entry point
+- [README](./README.md): Install, quick start, entry points and design decisions
+- [Changelog](./CHANGELOG.md): Version history and release notes
 
 ## Entry points
 
@@ -18,7 +21,13 @@ Scoped events (`auth.login`), levels `debug`, `info`, `warn`, `error`, and plugg
 - `@vllnt/logger/posthog`: `createPostHogOutput`
 - `@vllnt/logger/testing`: `createTestOutput`
 
+## Ecosystem
+
+- [vllnt oss](https://oss.vllnt.com/llms.txt): Index of all @vllnt open-source packages
+
 ## Optional
 
-- [Security Policy](SECURITY.md): Vulnerability reporting
-- [License](LICENSE): MIT
+- [Contributing](https://github.com/vllnt/logger/blob/main/CONTRIBUTING.md): Development setup and release flow
+- [AGENTS](https://github.com/vllnt/logger/blob/main/AGENTS.md): Agent instructions for working on this repository (not shipped in the package)
+- [Security Policy](https://github.com/vllnt/logger/blob/main/SECURITY.md): Vulnerability reporting
+- [License](./LICENSE): MIT

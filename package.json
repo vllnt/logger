@@ -52,6 +52,7 @@
     "lint": "eslint --cache --cache-location node_modules/.cache/eslint/ --max-warnings 0",
     "lint:fix": "eslint --cache --cache-location node_modules/.cache/eslint/ --fix",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage --coverage.include=src --coverage.reporter=text",
     "test:watch": "vitest"
   },
   "publishConfig": {
@@ -60,13 +61,14 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "@vitest/coverage-v8": "^5.1.1",
     "@vllnt/eslint-config": "^2.1.0",
-    "@vllnt/typescript": "^2.0.0",
+    "@vllnt/typescript": "^3.0.0",
     "eslint": "^9.39.5",
     "prettier": "^3.10.1",
     "tsup": "^9.0.0",
     "typescript": "^6.0.3",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "packageManager": "pnpm@10.34.8",
   "pnpm": {

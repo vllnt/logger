@@ -35,6 +35,7 @@ Node.js is pinned in `.node-version`; pnpm is pinned by `packageManager` in `pac
 | `pnpm lint` | ESLint, zero warnings |
 | `pnpm check-types` | `tsc --noEmit` |
 | `pnpm test` | Vitest |
+| `pnpm test:coverage` | Vitest with v8 coverage of `src/` |
 | `pnpm build` | tsup build to `dist/` |
 | `pnpm pack --dry-run` | Preview tarball (`dist`, `src`, `docs/API.md`, `CHANGELOG.md`, `llms.txt`, `README.md`, `LICENSE`, `package.json`) |
 

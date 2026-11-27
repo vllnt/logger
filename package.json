@@ -2,23 +2,36 @@
   "name": "@vllnt/logger",
   "version": "0.1.3",
   "type": "module",
-  "description": "Structured logging for the @vllnt ecosystem",
+  "description": "Zero-dependency structured JSON logger for TypeScript with scoped events, log levels, timing, and console, PostHog and test outputs for Node.js and Convex.",
   "license": "MIT",
-  "author": "bntvllnt",
+  "author": {
+    "name": "bntvllnt",
+    "url": "https://bntvllnt.com"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/bntvllnt"
+  },
   "homepage": "https://oss.vllnt.com/packages/logger",
   "repository": {
     "type": "git",
     "url": "https://github.com/vllnt/logger"
   },
+  "bugs": {
+    "url": "https://github.com/vllnt/logger/issues"
+  },
   "keywords": [
     "logger",
     "logging",
     "structured-logging",
-    "json",
+    "json-logger",
+    "log-levels",
+    "typescript",
+    "nodejs",
     "convex",
     "posthog",
-    "typescript",
-    "zero-dependency"
+    "zero-dependency",
+    "esm"
   ],
   "sideEffects": false,
   "exports": {

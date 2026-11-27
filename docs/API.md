@@ -47,7 +47,7 @@ import { createBackendLogger } from "@vllnt/logger";
 
 const logger = createBackendLogger("payments");
 logger.warn("charge.declined", { amount: 99 });
-// console.warn: {"amount":99,"event":"payments.charge.declined","level":"warn","timestamp":"..."}
+// console.warn: {"amount":99,"event":"payments.charge.declined","level":"warn","timestamp":"2026-11-27T12:00:00.000Z"}
 ```
 
 ### `createLogger(scope: string, config: LoggerConfig): Logger`
@@ -75,6 +75,8 @@ Both log `info` `<scope>.<label>.start` with `extraData`, then `info` `<scope>.<
 with `extraData` and `durationMs`. If `execute` throws, they log `error` `<scope>.<label>.error`
 with `extraData`, `durationMs` and `error` (the `Error` message, otherwise `String(value)`, or
 `"[unprintable error]"`), then rethrow the original error. The message is logged verbatim.
+An entry whose `extraData` cannot be read (for example a throwing getter) is dropped; the helpers
+still return the result or rethrow the original error.
 
 ```ts
 import { consoleOutput, createExtendedLogger } from "@vllnt/logger";
@@ -120,7 +122,7 @@ Builds an entry: `{ ...data, event, level, timestamp }`. It does not add a scope
 import { formatLogEntry } from "@vllnt/logger";
 
 formatLogEntry("info", "cache.hit", { key: "user:1" });
-// { key: "user:1", event: "cache.hit", level: "info", timestamp: "2026-…Z" }
+// { key: "user:1", event: "cache.hit", level: "info", timestamp: "2026-11-27T12:00:00.000Z" }
 ```
 
 ### `parseLogLevel(value: string | undefined, defaultLevel?: LogLevel): LogLevel`
@@ -183,7 +185,7 @@ logger.info("created", { orderId });
 Calls `capture(entry.event, properties)`, where `properties` is the entry without `event`
 (`level`, `timestamp` and your data). Errors thrown by `capture`, and rejections of a promise it
 returns, are swallowed. No PostHog SDK dependency: pass your own function. posthog-js
-`capture(event, properties)` fits as is:
+`capture(event, properties)` takes the same parameters; the arrow wrapper keeps its `this` bound:
 
 ```ts
 import { createLogger } from "@vllnt/logger";

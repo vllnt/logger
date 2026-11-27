@@ -5,7 +5,7 @@
  * Safe to import in any runtime (Node, Convex, browser, edge).
  */
 
-/** Log levels ordered by severity */
+/** The four log levels. Severity order: debug < info < warn < error. */
 export type LogLevel = "debug" | "error" | "info" | "warn";
 
 /** Structured log data payload */
@@ -45,7 +45,7 @@ export type LogOutput = (entry: LogEntry) => void;
 
 /** Configuration for creating a logger */
 export type LoggerConfig = {
-  /** Returns the current log level. Called on every log emit — keep it cheap. */
+  /** Returns the current log level. Called on every log call, including calls its level filters out — keep it cheap. */
   getLogLevel: () => LogLevel;
   output: LogOutput;
 };

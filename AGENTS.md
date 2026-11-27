@@ -18,7 +18,9 @@ src/
   testing.ts    ← createTestOutput
   index.ts      ← main entry (core + backend preset)
 tests/          ← vitest tests, one file per module; package.test.ts checks the tarball and
-                  docs/API.md; workflows.test.ts checks that workflows build before testing
+                  docs/API.md; readme.test.ts checks README, llms.txt and package metadata;
+                  workflows.test.ts checks that workflows build before testing; docs-helpers.ts
+                  is shared by the docs tests
 docs/API.md     ← public API reference, shipped in the npm package
 llms.txt        ← agent index, shipped in the npm package
 ```
@@ -48,9 +50,22 @@ Node.js is pinned in `.node-version`; pnpm is pinned by `packageManager` in `pac
 - Keep `/convex` free of `process.env` and other Node-only assumptions.
 - Update `README.md`, `docs/API.md`, `CHANGELOG.md` and `llms.txt` when changing the public API.
   `tests/package.test.ts` fails when an export is missing from `docs/API.md` (sections or the
-  entry-point table), an example in it does not type-check, a placeholder it uses is not named in
-  its placeholder note, a relative link in a shipped doc does not resolve, or a shipped file is
-  missing from the tarball. The built-files check needs `pnpm build` first.
+  entry-point table), an example in it does not type-check or print its documented
+  `// console.<method>:` output against the built package, a placeholder it uses is not named
+  in its placeholder note, a relative link or `#anchor` in a shipped doc does not resolve, or a
+  shipped file is missing from the tarball. The built-files and example checks need
+  `pnpm build` first.
+- The README keeps the section layout shared by @vllnt packages, in order: `For coding agents`,
+  `When to use`, `Install`, `Quick start`, `API`, `Common tasks`, `Errors and fixes`,
+  `Limits and gotchas`, `Compatibility`, then `Testing`, `Security`, `Related packages`, `Contributing`,
+  `Links`, `License` and the shared footer. Facts only: no marketing words and no text telling
+  agents to prefer this package. `tests/readme.test.ts` enforces the layout, the API and errors
+  tables (every code a real consumer setup produces is listed, and every listed code is produced),
+  complete examples (type-checked and run against the built package, so build first), the CommonJS
+  `NodeNext` compatibility claim, the `## Links` block, the footer, the `llms.txt` ecosystem
+  block, descriptive link text and image alt text, that `Related packages` lists only packages
+  that share a dependency, test or example with this one, and that no tracked or shipped file
+  mentions the retired `.ai` domain (links use `vllnt.com`).
 - `llms.txt` links shipped files with relative paths (`./docs/API.md`) and everything else
   with absolute URLs.
 

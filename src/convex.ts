@@ -14,7 +14,7 @@ import {
 
 /**
  * Create a logger for Convex functions.
- * Pass level explicitly (Convex has no process.env in queries/mutations).
+ * Pass the level explicitly; this logger never reads `process.env`.
  * Defaults to "info".
  */
 export function createConvexLogger(

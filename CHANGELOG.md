@@ -12,7 +12,7 @@ All notable changes to this project are documented here. The format follows
   `CHANGELOG.md` and the TypeScript sources in `src/`, so coding agents can read docs that match
   the installed version from `node_modules/@vllnt/logger/`. `llms.txt` links the shipped files
   with relative paths.
-- README notes the bundled docs for coding agents and lists related packages.
+- README notes the bundled docs for coding agents.
 - `package.json` sets `homepage` and `keywords`. Docs-only changes on `main` now publish a canary.
 
 ### Fixed
@@ -32,8 +32,8 @@ All notable changes to this project are documented here. The format follows
   return the result or rethrow the original error, and drop only the entries that cannot be built.
 - `docs/API.md`: the posthog-node wrapper now type-checks under `exactOptionalPropertyTypes`
   (`(event, properties = {}) => client.capture({ distinctId, event, properties })`), and the
-  placeholder note names every placeholder. Tests type-check every example against the sources
-  and posthog-node, and check the entry-point table against the real exports.
+  placeholder note names every placeholder. Tests check the entry-point table against the real
+  exports.
 - The publish workflow builds before it runs the tests, so the check of the built package files
   runs before every publish instead of being skipped.
 
@@ -45,6 +45,22 @@ All notable changes to this project are documented here. The format follows
   pinned to commit SHAs, the workflow token is read-only by default, and pnpm is pinned to 10.34.8
   with a seven-day minimum release age.
 - README documents the release flow, serialization behaviour and that there is no built-in redaction.
+- README follows the section layout shared by @vllnt packages, for coding agents: when to use,
+  quick start, an API table of every export, common tasks, errors and fixes, limits and gotchas,
+  and compatibility. Every TypeScript example is complete and is type-checked against the built
+  package in tests; examples without third-party imports also run, and the output they show in
+  `// console.` comments is compared with what they print. `llms.txt` carries the same summary
+  and links to the package page.
+- README adds a `## Links` section (package page, release feed, package index and search, source,
+  issues, npm, community, author and sponsor links). Its `## Related packages` section states that
+  the package has no runtime or peer dependencies and that no other @vllnt package shares code, a
+  test or an example with it. `llms.txt` ends with the shared ecosystem block, which adds the
+  release feed and package search links.
+- `docs/API.md` examples (the code blocks that import a package) are type-checked against the
+  built package, with posthog-node 6 for the posthog-node wrapper; examples that show output in
+  `// console.` comments also run and are compared with it.
+- `package.json`: new `description` and `keywords`, `author` as an object, and new `funding` and
+  `bugs` fields. `createBackendLogger` TSDoc links the package page.
 - Built with tsup 9 and TypeScript 6. The `.d.ts` files of the subpaths and the shared core use
   `export type { … }`, and the subpath declarations import shared types from `./index.js`. The
   toolchain change does not change the types consumers see.

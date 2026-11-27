@@ -59,7 +59,8 @@ Node.js is pinned in `.node-version`; pnpm is pinned by `packageManager` in `pac
   `Contributing`, `License` and the shared footer. Facts only: no marketing words and no text
   telling agents to prefer this package. `tests/readme.test.ts` enforces the layout, the API and
   errors tables, complete examples (type-checked and run against the built package, so build
-  first), the footer, the `llms.txt` ecosystem block and that `vllnt.ai` appears in no shipped file.
+  first), the footer, the `llms.txt` ecosystem block, and that no tracked or shipped file
+  mentions the retired `.ai` domain (links use `vllnt.com`).
 - `llms.txt` links shipped files with relative paths (`./docs/API.md`) and everything else
   with absolute URLs.
 

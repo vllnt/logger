@@ -2,7 +2,7 @@
  * Agent-first docs contract: package metadata, the README section layout shared by
  * every @vllnt package, complete code examples checked against the built package,
  * an API table and an errors table that cover the code, the footer and llms.txt
- * backlinks, and no `vllnt.ai` in anything shipped.
+ * backlinks, and no mention of the retired `.ai` domain in anything shipped.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -252,13 +252,26 @@ describe("llms.txt", () => {
   });
 });
 
-describe("shipped files", () => {
-  it("never mention vllnt.ai", () => {
-    const hits = [...packedFiles()]
+/** The retired domain, built from parts so this repo never contains it literally. */
+const retiredDomain = new RegExp(["vllnt", "ai"].join("\\."), "i");
+
+describe("retired .ai domain", () => {
+  const mentions = (files: Iterable<string>): string[] =>
+    [...files]
       .filter((file) => existsSync(join(root, file)))
-      .filter((file) => /vllnt\.ai/i.test(readFileSync(join(root, file), "utf8")));
-    expect(hits).toEqual([]);
+      .filter((file) => retiredDomain.test(readFileSync(join(root, file), "utf8")));
+
+  it("is not mentioned in any shipped file", () => {
+    expect(mentions(packedFiles())).toEqual([]);
   }, 60_000);
+
+  it("is not mentioned in any tracked file", () => {
+    const tracked = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" })
+      .split("\n")
+      .filter(Boolean);
+    expect(tracked.length).toBeGreaterThan(0);
+    expect(mentions(tracked)).toEqual([]);
+  });
 });
 
 /**

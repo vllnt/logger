@@ -4,7 +4,7 @@
  * an API table and an errors table that cover the code, the footer and llms.txt
  * backlinks, and no mention of the retired `.ai` domain in anything shipped.
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -187,6 +187,23 @@ describe("README.md API and errors", () => {
     }
   });
 
+  it.each(["README.md", "llms.txt", "docs/API.md"])(
+    "%s links every other @vllnt package to its package page",
+    (file) => {
+      const text = read(file);
+      const mentions = [...text.matchAll(/@vllnt\/([\w-]+)/g)]
+        .map((match) => match[1] ?? "")
+        .filter((pkg) => pkg !== name);
+      const linked = [...text.matchAll(/\[`@vllnt\/([\w-]+)`\]\(([^)]+)\)/g)].filter(
+        ([, pkg]) => pkg !== name,
+      );
+      for (const [, pkg, url] of linked) {
+        expect(url).toBe(`https://oss.vllnt.com/packages/${pkg}`);
+      }
+      expect(linked.map(([, pkg]) => pkg)).toEqual(mentions);
+    },
+  );
+
   it("documents every message marker the sources can write", () => {
     const sources = entries.map((entry) => entry.source).concat("src/core.ts");
     const markers = new Set(
@@ -318,22 +335,78 @@ describe.skipIf(!existsSync(join(root, "dist")) && !process.env.CI)("README exam
     expect(diagnostics).toEqual([]);
   }, 60_000);
 
-  it("run", () => {
+  /** Replaces the timestamp so documented and real output lines compare equal. */
+  const normalize = (line: string): string =>
+    line.replace(/"timestamp":"[^"]+"/, '"timestamp":"<timestamp>"');
+
+  it("run and print what their // console.<method>: comments show", () => {
     const runnable = blocks.filter((block) =>
       [...block.code.matchAll(/from "([^"]+)"/g)].every(
         ([, specifier]) => specifier?.startsWith("@vllnt/logger") || specifier?.startsWith("node:"),
       ),
     );
     expect(runnable.length).toBeGreaterThan(0);
+    const consoleShim =
+      'for (const method of ["debug", "info", "warn", "error"]) console[method] = (line) => process.stdout.write(`console.${method}: ${line}\\n`);\n';
+    let documented = 0;
     for (const block of runnable) {
       const file = join(project, `readme-${block.startLine}.mjs`);
       const { outputText } = ts.transpileModule(block.code, {
         compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
       });
-      writeFileSync(file, outputText);
-      expect(() =>
-        execFileSync(process.execPath, [file], { cwd: project, stdio: "pipe", timeout: 20_000 }),
-      ).not.toThrow();
+      writeFileSync(file, consoleShim + outputText);
+      const output = execFileSync(process.execPath, [file], {
+        cwd: project,
+        encoding: "utf8",
+        env: { ...process.env, LOG_LEVEL: "" },
+        timeout: 20_000,
+      });
+      const printed = output.split("\n").map(normalize);
+      for (const [, expected] of block.code.matchAll(/^\/\/ (console\.\w+: .+)$/gm)) {
+        documented += 1;
+        expect(printed, `README.md:${block.startLine}`).toContain(normalize(expected ?? ""));
+      }
     }
+    expect(documented).toBeGreaterThan(0);
   }, 120_000);
+
+  it("ship the package page link in the main entry typings", () => {
+    expect(readFileSync(join(root, "dist", "index.d.ts"), "utf8")).toContain(
+      `@see https://oss.vllnt.com/packages/${name}`,
+    );
+  });
+
+  it("list every error a consumer setup really produces", () => {
+    const errors = section("Errors and fixes");
+    const required = spawnSync(
+      process.execPath,
+      ["--input-type=commonjs", "-e", 'require("@vllnt/logger")'],
+      { cwd: project, encoding: "utf8" },
+    );
+    const nodeCode = /\b(ERR_[A-Z_]+)\b/.exec(required.stderr)?.[1];
+    expect(nodeCode, required.stderr).toBeDefined();
+    expect(errors).toContain(nodeCode);
+
+    const consumer = new Map([
+      [join(project, "consumer.cts"), 'import { createLogger } from "@vllnt/logger";\nvoid createLogger;\n'],
+    ]);
+    const setups: ts.CompilerOptions[] = [
+      { module: ts.ModuleKind.Node16, moduleResolution: ts.ModuleResolutionKind.Node16 },
+      { module: ts.ModuleKind.CommonJS, moduleResolution: ts.ModuleResolutionKind.Node10 },
+      {
+        ignoreDeprecations: "6.0",
+        module: ts.ModuleKind.CommonJS,
+        moduleResolution: ts.ModuleResolutionKind.Node10,
+      },
+    ];
+    for (const setup of setups) {
+      const codes = typeCheck(consumer, { ...setup, noEmit: true, types: [] }).map(
+        (diagnostic) => /TS\d+/.exec(diagnostic)?.[0] ?? diagnostic,
+      );
+      expect(codes.length, JSON.stringify(setup)).toBeGreaterThan(0);
+      for (const code of codes) {
+        expect(errors, `Errors and fixes lists ${code}`).toContain(code);
+      }
+    }
+  }, 60_000);
 });

@@ -4,7 +4,7 @@ Zero-dependency structured JSON logger for TypeScript with scoped events, log le
 
 ## For coding agents
 
-`node_modules/@vllnt/logger/docs/API.md` documents every export with an example, and the TypeScript
+`node_modules/@vllnt/logger/docs/API.md` documents every export with its signature, and the TypeScript
 sources ship in `node_modules/@vllnt/logger/src/`. Both match the installed version.
 
 ## When to use
@@ -127,12 +127,12 @@ Log calls never throw. These are the error messages and markers you can see, and
 
 | Error or message | Cause | Fix |
 | --- | --- | --- |
-| `[logger:serialize-error] event=<event> level=<level>` written instead of JSON | `consoleOutput` could not serialize the entry: data has a throwing `toJSON` or getter | Log plain data; convert class instances before logging |
+| `[logger:serialize-error] event=<event> level=<level>` written instead of JSON | `consoleOutput` could not serialize the entry: a value has a throwing `toJSON`, or a nested object has a throwing getter | Log plain data; convert class instances before logging |
 | `"[Circular]"` as a field value | The data has a circular reference | None needed; log a plain copy to keep the full value |
 | `"error": "[unprintable error]"` in a `<label>.error` entry | `withTiming` caught a value whose conversion to a string throws | Throw `Error` instances |
 | The error from your function, after a `<label>.error` entry | `withTiming` and `withTimingSync` rethrow the original error | Catch it around the `withTiming` call |
-| `ERR_PACKAGE_PATH_NOT_EXPORTED` from `require("@vllnt/logger")` | The package is ESM only and has no `require` export | Use `import`, or `await import("@vllnt/logger")` from CommonJS |
-| `TS2307: Cannot find module '@vllnt/logger'` | TypeScript `moduleResolution` is `node10` (`node`), which ignores `exports` | Set `moduleResolution` to `nodenext`, `node16` or `bundler` |
+| `ERR_PACKAGE_PATH_NOT_EXPORTED` from `require("@vllnt/logger")` | The package is ESM only and has no `require` export. A CommonJS project built with `moduleResolution: nodenext` type-checks, but its output calls `require` and fails here at runtime | Use `import`; in CommonJS use `await import("@vllnt/logger")`, a `.mts` file, or `"type": "module"` |
+| `TS2307: Cannot find module '@vllnt/logger'` (TypeScript 6 reports `TS5107`, `node10` is deprecated, first) | TypeScript `moduleResolution` is `node10` (`node`), which ignores `exports` | Set `moduleResolution` to `nodenext`, `node16` or `bundler` |
 | `TS1479: The current file is a CommonJS module whose imports will produce 'require' calls` | A CommonJS file under `node16` imports this ESM package | Add `"type": "module"`, use a `.mts` file, or use `await import()` |
 
 ## Limits and gotchas
@@ -143,17 +143,18 @@ Log calls never throw. These are the error messages and markers you can see, and
 - Data keys `event`, `level` and `timestamp` are silently replaced by the logger's values.
 - `formatLogEntry` does not add the scope prefix; only logger methods do.
 - A throwing output is swallowed without a trace. `createPostHogOutput` also swallows rejected promises. Outputs are synchronous; returned promises are not awaited.
-- `consoleOutput` writes `BigInt` as a string and `Error` as `{ name, message, stack }`. Like `JSON.stringify`, it writes `Map` and `Set` as `{}`, `NaN` as `null`, and drops `undefined`, functions and symbols.
+- A throwing getter at the top level of the data drops the whole entry silently: it runs while the entry is built. A throwing getter deeper down gives the `[logger:serialize-error]` line.
+- `consoleOutput` writes `BigInt` as a string and `Error` as `{ name, message, stack }`. Like `JSON.stringify`, it writes `Map` and `Set` as `{}` and `NaN` as `null`; it drops `undefined`, functions and symbols from objects and writes them as `null` in arrays.
 - `withTiming` logs `error.message` verbatim, without the stack. There is no redaction.
 - `createTestOutput` keeps every entry in memory; create a new one per test.
 
 ## Compatibility
 
 - Runtime dependencies: none. Peer dependencies: none.
-- ESM only, with typings for every entry point. TypeScript `moduleResolution` must be `nodenext`, `node16` or `bundler`.
+- ESM only, with typings for every entry point. TypeScript `moduleResolution` must be `nodenext`, `node16` or `bundler`, and the importing file must be ESM: in a CommonJS project, `nodenext` type-checks but the emitted `require` fails at runtime.
 - Node.js: no `engines` field. The build targets ES2024; CI tests on Node.js 24.
 - Convex: `@vllnt/logger/convex` does not read `process.env`. Browsers and edge runtimes: the core uses no Node.js APIs and `createBackendLogger` checks for `process` first, but tests run only on Node.js.
-- PostHog: posthog-js `capture(event, properties)` fits `PostHogCapture` directly. posthog-node needs the wrapper shown above; tests check it against posthog-node 6.
+- PostHog: with posthog-js, pass `(event, properties) => posthog.capture(event, properties)` so `capture` keeps its `this`. posthog-node needs the wrapper shown above; tests check it against posthog-node 6.
 
 ## Testing
 

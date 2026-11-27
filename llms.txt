@@ -15,8 +15,8 @@ The docs are bundled in the package at `node_modules/@vllnt/logger/docs/`, with 
 - Use it when log entries should go to several outputs, such as the console and PostHog.
 - Use it when tests should assert on log entries instead of console output.
 - Do not use it when you need log transports, files, rotation, redaction or async batching: use pino or winston.
-- Do not use it when entries must be stored and queried later: use `@vllnt/convex-events`.
-- Do not use it for product analytics with consent: use `@vllnt/analytics`.
+- Do not use it when entries must be stored and queried later: use [`@vllnt/convex-events`](https://oss.vllnt.com/packages/convex-events).
+- Do not use it for product analytics with consent: use [`@vllnt/analytics`](https://oss.vllnt.com/packages/analytics).
 
 ## Docs
 

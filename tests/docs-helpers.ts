@@ -183,7 +183,7 @@ export function typeCheck(files: Map<string, string>, options: ts.CompilerOption
   return ts
     .getPreEmitDiagnostics(ts.createProgram([...files.keys()], options, host))
     .map((diagnostic) => {
-      const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
+      const message = `TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")}`;
       if (!diagnostic.file) return message;
       const { line } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
       const text = diagnostic.file.text.split("\n")[line]?.trim();

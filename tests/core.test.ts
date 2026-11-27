@@ -6,6 +6,7 @@ import {
   createLogger,
   formatLogEntry,
   parseLogLevel,
+  type ExtendedLogger,
   type LogEntry,
   type LogOutput,
 } from "../src/core.js";
@@ -411,6 +412,83 @@ describe("never throws from a log call", () => {
       }),
     ).toThrow();
     expect(entries.at(-1)!.error).toBe("[unprintable error]");
+  });
+
+  describe("withTiming with extraData that has a throwing getter", () => {
+    const setup = (): { entries: LogEntry[]; logger: ExtendedLogger } => {
+      const entries: LogEntry[] = [];
+      const logger = createExtendedLogger("t", {
+        getLogLevel: () => "debug",
+        output: (entry) => entries.push(entry),
+      });
+      return { entries, logger };
+    };
+    const badData = {
+      get bad(): string {
+        throw new Error("getter");
+      },
+    };
+
+    it("withTiming returns the result and drops the entries", async () => {
+      const { entries, logger } = setup();
+
+      await expect(
+        logger.withTiming("op", () => Promise.resolve(42), badData),
+      ).resolves.toBe(42);
+      expect(entries).toHaveLength(0);
+    });
+
+    it("withTiming rethrows the original error", async () => {
+      const { entries, logger } = setup();
+      const failure = new Error("work failed");
+
+      await expect(
+        logger.withTiming("op", () => Promise.reject(failure), badData),
+      ).rejects.toBe(failure);
+      expect(entries).toHaveLength(0);
+    });
+
+    it("withTimingSync returns the result and drops the entries", () => {
+      const { entries, logger } = setup();
+
+      expect(logger.withTimingSync("op", () => 42, badData)).toBe(42);
+      expect(entries).toHaveLength(0);
+    });
+
+    it("withTimingSync still logs the entries that can be built", () => {
+      const { entries, logger } = setup();
+      let reads = 0;
+      const failsAfterFirstRead = {
+        get flaky(): number {
+          reads += 1;
+          if (reads > 1) {
+            throw new Error("getter");
+          }
+          return reads;
+        },
+      };
+
+      expect(logger.withTimingSync("op", () => 42, failsAfterFirstRead)).toBe(
+        42,
+      );
+      expect(entries.map((entry) => entry.event)).toEqual(["t.op.start"]);
+    });
+
+    it("withTimingSync rethrows the original error", () => {
+      const { entries, logger } = setup();
+      const failure = new Error("work failed");
+
+      expect(() =>
+        logger.withTimingSync(
+          "op",
+          () => {
+            throw failure;
+          },
+          badData,
+        ),
+      ).toThrow(failure);
+      expect(entries).toHaveLength(0);
+    });
   });
 });
 

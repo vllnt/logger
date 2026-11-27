@@ -30,7 +30,7 @@ function stepsByJob(yaml: string): Map<string, string[]> {
       jobs.set(jobName, job);
       continue;
     }
-    const step = /^\s*-?\s*run:\s*pnpm (?:run )?(build|test)\s*$/.exec(line)?.[1];
+    const step = /^\s*-?\s*run:\s*pnpm (?:run )?(build|test)\b/.exec(line)?.[1];
     if (job && step) {
       job.push(step);
     }

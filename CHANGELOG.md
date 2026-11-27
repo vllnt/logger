@@ -43,6 +43,9 @@ All notable changes to this project are documented here. The format follows
   pinned to commit SHAs, the workflow token is read-only by default, and pnpm is pinned to 10.34.8
   with a seven-day minimum release age.
 - README documents the release flow, serialization behaviour and that there is no built-in redaction.
+- Built with tsup 9 and TypeScript 6. The shipped `.d.ts` files use `export type { … }` and
+  the subpath declarations import shared types from `./index.js`; the types consumers see are
+  unchanged.
 - Development only: `@vllnt/typescript` 3 (stricter compiler flags; published output unchanged),
   `vitest` 5.1.1, and `pnpm test:coverage`.
 

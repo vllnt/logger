@@ -17,7 +17,8 @@ src/
   posthog.ts    ← createPostHogOutput
   testing.ts    ← createTestOutput
   index.ts      ← main entry (core + backend preset)
-tests/          ← vitest tests, one file per module; package.test.ts checks the tarball
+tests/          ← vitest tests, one file per module; package.test.ts checks the tarball and
+                  docs/API.md; workflows.test.ts checks that workflows build before testing
 docs/API.md     ← public API reference, shipped in the npm package
 llms.txt        ← agent index, shipped in the npm package
 ```
@@ -46,8 +47,10 @@ Node.js is pinned in `.node-version`; pnpm is pinned by `packageManager` in `pac
 - User data cannot overwrite the reserved fields `event`, `level` and `timestamp`.
 - Keep `/convex` free of `process.env` and other Node-only assumptions.
 - Update `README.md`, `docs/API.md`, `CHANGELOG.md` and `llms.txt` when changing the public API.
-  `tests/package.test.ts` fails when an export is missing from `docs/API.md` or a shipped file is
-  missing from the tarball.
+  `tests/package.test.ts` fails when an export is missing from `docs/API.md` (sections or the
+  entry-point table), an example in it does not type-check, a placeholder it uses is not named in
+  its placeholder note, a relative link in a shipped doc does not resolve, or a shipped file is
+  missing from the tarball. The built-files check needs `pnpm build` first.
 - `llms.txt` links shipped files with relative paths (`./docs/API.md`) and everything else
   with absolute URLs.
 

@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.3] - Unreleased
+## [0.1.3] - 2026-11-27
 
 ### Added
 
@@ -28,6 +28,12 @@ All notable changes to this project are documented here. The format follows
 - `createPostHogOutput` swallows rejected promises returned by `capture` instead of leaving an
   unhandled rejection. `PostHogCapture` now accepts functions returning any value.
 - `withTiming` logs a placeholder when a thrown value cannot be converted to a string.
+- `docs/API.md`: the posthog-node wrapper now type-checks under `exactOptionalPropertyTypes`
+  (`(event, properties = {}) => client.capture({ distinctId, event, properties })`), and the
+  placeholder note names every placeholder. Tests type-check every example against the sources
+  and posthog-node, and check the entry-point table against the real exports.
+- The publish workflow builds before it runs the tests, so the check of the built package files
+  runs before every publish instead of being skipped.
 
 ### Changed
 
@@ -37,6 +43,11 @@ All notable changes to this project are documented here. The format follows
   pinned to commit SHAs, the workflow token is read-only by default, and pnpm is pinned to 10.34.8
   with a seven-day minimum release age.
 - README documents the release flow, serialization behaviour and that there is no built-in redaction.
+- Built with tsup 9 and TypeScript 6. The `.d.ts` files of the subpaths and the shared core use
+  `export type { … }`, and the subpath declarations import shared types from `./index.js`. The
+  toolchain change does not change the types consumers see.
+- Development only: `@vllnt/typescript` 3 (stricter compiler flags; published output unchanged),
+  `vitest` 5.1.1, and `pnpm test:coverage`.
 
 ## [0.1.2] - 2026-03-10
 

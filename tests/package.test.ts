@@ -58,6 +58,20 @@ function packedFiles(): Set<string> {
   );
 }
 
+/** Markdown links in a shipped file that point inside the package. */
+function relativeLinks(file: string): string[] {
+  const text = readFileSync(join(root, file), "utf8");
+  return [...text.matchAll(/\]\(([^)\s]+)\)/g)]
+    .map((match) => match[1] ?? "")
+    .filter((href) => !/^[a-z]+:/i.test(href) && !href.startsWith("#"));
+}
+
+/** Packed path a relative link in `file` points to, without its `#anchor`. */
+function linkTarget(file: string, href: string): string {
+  return normalize(join(dirname(file), href.replace(/#.*$/, "")));
+}
+
+const shippedDocs = ["llms.txt", "README.md", "docs/API.md", "CHANGELOG.md"];
 const exportTargets = readExportTargets();
 const packed = packedFiles();
 const entries = exportTargets.map(([subpath, target]) => ({
@@ -99,16 +113,22 @@ describe("package contents", () => {
     expect(internal).toEqual([]);
   });
 
-  it.each(["llms.txt", "README.md"])(
+  it("finds relative links to check", () => {
+    expect(relativeLinks("llms.txt").length).toBeGreaterThan(0);
+    expect(relativeLinks("README.md").length).toBeGreaterThan(0);
+  });
+
+  it("resolves a link relative to its file and without its #anchor", () => {
+    expect(linkTarget("README.md", "docs/API.md#entry-points")).toBe("docs/API.md");
+    expect(linkTarget("llms.txt", "./docs/API.md")).toBe("docs/API.md");
+    expect(linkTarget("docs/API.md", "../README.md#install")).toBe("README.md");
+  });
+
+  it.each(shippedDocs)(
     "resolves every relative link in %s inside the package",
     (file) => {
-      const text = readFileSync(join(root, file), "utf8");
-      const links = [...text.matchAll(/\]\(([^)]+)\)/g)]
-        .map((match) => match[1] ?? "")
-        .filter((href) => !/^[a-z]+:/i.test(href));
-      expect(links.length).toBeGreaterThan(0);
-      for (const href of links) {
-        expect(packed).toContain(normalize(href));
+      for (const href of relativeLinks(file)) {
+        expect(packed).toContain(linkTarget(file, href));
       }
     },
   );
@@ -125,17 +145,98 @@ describe("docs/API.md", () => {
   );
   const checker = program.getTypeChecker();
 
+  function exportsOf(source: string): string[] {
+    const file = program.getSourceFile(join(root, source));
+    const moduleSymbol = file && checker.getSymbolAtLocation(file);
+    if (!moduleSymbol) {
+      throw new Error(`cannot read exports of ${source}`);
+    }
+    return checker.getExportsOfModule(moduleSymbol).map((symbol) => symbol.getName());
+  }
+
+  it.each(entries)(
+    "lists exactly the exports of $specifier in the entry-point table",
+    ({ source, specifier }) => {
+      const row = api.split("\n").find((line) => line.startsWith(`| \`${specifier}\` `));
+      expect(row, `docs/API.md has no entry-point row for ${specifier}`).toBeDefined();
+      const listed = [...(row?.split("|")[2] ?? "").matchAll(/`(\w+)`/g)].map(
+        (match) => match[1],
+      );
+      expect(listed.sort()).toEqual(exportsOf(source).sort());
+    },
+  );
+
+  /** Types the examples' placeholders are checked with. */
+  const placeholderTypes: Record<string, string> = {
+    apiKey: "string",
+    distinctId: "string",
+    expect: 'typeof import("vitest").expect',
+    fetchRows: "() => Promise<unknown[]>",
+    orderId: "string",
+    posthog: "{ capture: (event: string, properties?: Record<string, unknown>) => void }",
+  };
+
+  it("names every placeholder the examples use", () => {
+    const note = /^Examples use[\s\S]*?(?=\n\n)/m.exec(api)?.[0] ?? "";
+    const named = [...note.matchAll(/`(\w+)`/g)].map((match) => match[1]);
+    expect(named.sort()).toEqual(Object.keys(placeholderTypes).sort());
+  });
+
+  /** A full type-check takes seconds on a loaded host, hence the long timeout. */
+  it("type-checks every example against the sources", () => {
+    const declarations = Object.entries(placeholderTypes)
+      .map(([name, type]) => `declare const ${name}: ${type};`)
+      .join("\n");
+    const examples = [...api.matchAll(/```ts\n([\s\S]*?)```/g)]
+      .map((match) => match[1] ?? "")
+      .filter((code) => /^import /m.test(code));
+    expect(examples.length).toBeGreaterThan(0);
+    const files = new Map(
+      examples.map((code, index) => [
+        join(root, `docs-example-${index}.ts`),
+        `${declarations}\nexport {};\n${code}`,
+      ]),
+    );
+    const options: ts.CompilerOptions = {
+      exactOptionalPropertyTypes: true,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noEmit: true,
+      paths: {
+        "@vllnt/logger": [join(root, "src/index.ts")],
+        "@vllnt/logger/*": [join(root, "src/*.ts")],
+      },
+      skipLibCheck: true,
+      strict: true,
+      target: ts.ScriptTarget.ES2022,
+      types: ["node"],
+    };
+    const host = ts.createCompilerHost(options);
+    const { fileExists, getSourceFile, readFile } = host;
+    host.fileExists = (name) => files.has(name) || fileExists(name);
+    host.readFile = (name) => files.get(name) ?? readFile(name);
+    host.getSourceFile = (name, version, ...rest) => {
+      const text = files.get(name);
+      return text === undefined
+        ? getSourceFile(name, version, ...rest)
+        : ts.createSourceFile(name, text, version);
+    };
+    const diagnostics = ts
+      .getPreEmitDiagnostics(ts.createProgram([...files.keys()], options, host))
+      .map((diagnostic) => {
+        const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
+        if (!diagnostic.file) return message;
+        const { line } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
+        const text = diagnostic.file.text.split("\n")[line]?.trim();
+        return `${diagnostic.file.fileName.replace(`${root}/`, "")}: ${text}\n  ${message}`;
+      });
+    expect(diagnostics).toEqual([]);
+  }, 60_000);
+
   it.each(entries)(
     "documents exactly the exports of $specifier",
     ({ source, specifier }) => {
-      const file = program.getSourceFile(join(root, source));
-      const moduleSymbol = file && checker.getSymbolAtLocation(file);
-      if (!moduleSymbol) {
-        throw new Error(`cannot read exports of ${source}`);
-      }
-      const exported = checker
-        .getExportsOfModule(moduleSymbol)
-        .map((symbol) => symbol.getName());
+      const exported = exportsOf(source);
       const header = `## \`${specifier}\`\n`;
       const start = api.indexOf(header);
       expect(start, `docs/API.md has no "${header.trim()}" section`).not.toBe(-1);

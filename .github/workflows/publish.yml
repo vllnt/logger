@@ -46,8 +46,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm check-types
-      - run: pnpm test
       - run: pnpm build
+      - run: pnpm test
 
   canary:
     name: Publish Canary

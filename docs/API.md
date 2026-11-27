@@ -18,7 +18,8 @@ its own type declarations.
 
 Shared types (`LogEntry`, `LogLevel`, …) are exported only from `@vllnt/logger`.
 
-Examples use placeholders (`posthog`, `fetchRows`, `orderId`) and Vitest's `expect`.
+Examples use placeholders (`posthog` for a posthog-js instance, `apiKey`, `distinctId`,
+`fetchRows`, `orderId`) and Vitest's `expect`.
 
 ## Behaviour shared by every logger
 
@@ -182,8 +183,7 @@ logger.info("created", { orderId });
 Calls `capture(entry.event, properties)`, where `properties` is the entry without `event`
 (`level`, `timestamp` and your data). Errors thrown by `capture`, and rejections of a promise it
 returns, are swallowed. No PostHog SDK dependency: pass your own function. posthog-js
-`capture(event, properties)` fits as is. posthog-node takes one object, so wrap it:
-`(event, properties) => client.capture({ distinctId, event, properties })`.
+`capture(event, properties)` fits as is:
 
 ```ts
 import { createLogger } from "@vllnt/logger";
@@ -193,6 +193,19 @@ const logger = createLogger("billing", {
   getLogLevel: () => "info",
   output: createPostHogOutput((event, properties) => posthog.capture(event, properties)),
 });
+```
+
+posthog-node `capture` takes one object, so wrap it. The `= {}` default keeps the wrapper valid
+under `exactOptionalPropertyTypes`, where posthog-node's `properties` does not accept `undefined`:
+
+```ts
+import { createPostHogOutput } from "@vllnt/logger/posthog";
+import { PostHog } from "posthog-node";
+
+const client = new PostHog(apiKey);
+const output = createPostHogOutput((event, properties = {}) =>
+  client.capture({ distinctId, event, properties }),
+);
 ```
 
 ### `PostHogCapture`

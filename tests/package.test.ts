@@ -1,83 +1,28 @@
 /**
  * Checks what `npm pack` would publish: the bundled agent docs ship, contributor
- * files do not, llms.txt links resolve inside the tarball, and docs/API.md names
- * every public export.
+ * files do not, relative links and anchors in shipped docs resolve inside the
+ * tarball, and docs/API.md names every public export with examples that type-check.
  */
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, normalize } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import ts from "typescript";
 
-type ExportTarget = { import: string; types: string };
+import {
+  anchorsOf,
+  codeBlocks,
+  entries,
+  exportsOf,
+  exportTargets,
+  linkTarget,
+  packedFiles,
+  read,
+  relativeLinks,
+  root,
+  shippedDocs,
+  typeCheck,
+} from "./docs-helpers.js";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isExportTarget(value: unknown): value is ExportTarget {
-  return (
-    isRecord(value) &&
-    typeof value.import === "string" &&
-    typeof value.types === "string"
-  );
-}
-
-function readExportTargets(): [string, ExportTarget][] {
-  const manifest: unknown = JSON.parse(
-    readFileSync(join(root, "package.json"), "utf8"),
-  );
-  if (!isRecord(manifest) || !isRecord(manifest.exports)) {
-    throw new Error("package.json has no exports map");
-  }
-  return Object.entries(manifest.exports).map(([subpath, target]) => {
-    if (!isExportTarget(target)) {
-      throw new Error(`exports["${subpath}"] needs import and types`);
-    }
-    return [subpath, target];
-  });
-}
-
-function packedFiles(): Set<string> {
-  const out = execFileSync(
-    "npm",
-    ["pack", "--dry-run", "--json", "--ignore-scripts"],
-    { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-  );
-  const result: unknown = JSON.parse(out);
-  const files = Array.isArray(result) && isRecord(result[0]) ? result[0].files : [];
-  if (!Array.isArray(files)) {
-    throw new Error("npm pack returned no file list");
-  }
-  return new Set(
-    files.flatMap((file: unknown) =>
-      isRecord(file) && typeof file.path === "string" ? [file.path] : [],
-    ),
-  );
-}
-
-/** Markdown links in a shipped file that point inside the package. */
-function relativeLinks(file: string): string[] {
-  const text = readFileSync(join(root, file), "utf8");
-  return [...text.matchAll(/\]\(([^)\s]+)\)/g)]
-    .map((match) => match[1] ?? "")
-    .filter((href) => !/^[a-z]+:/i.test(href) && !href.startsWith("#"));
-}
-
-/** Packed path a relative link in `file` points to, without its `#anchor`. */
-function linkTarget(file: string, href: string): string {
-  return normalize(join(dirname(file), href.replace(/#.*$/, "")));
-}
-
-const shippedDocs = ["llms.txt", "README.md", "docs/API.md", "CHANGELOG.md"];
-const exportTargets = readExportTargets();
 const packed = packedFiles();
-const entries = exportTargets.map(([subpath, target]) => ({
-  source: target.import.replace(/^\.\/dist\/(.+)\.js$/, "src/$1.ts"),
-  specifier: `@vllnt/logger${subpath.slice(1)}`,
-}));
 const entrySources = entries.map((entry) => entry.source);
 
 describe("package contents", () => {
@@ -125,34 +70,22 @@ describe("package contents", () => {
   });
 
   it.each(shippedDocs)(
-    "resolves every relative link in %s inside the package",
+    "resolves every relative link and #anchor in %s inside the package",
     (file) => {
       for (const href of relativeLinks(file)) {
-        expect(packed).toContain(linkTarget(file, href));
+        const target = linkTarget(file, href);
+        expect(packed).toContain(target);
+        const anchor = /#(.+)$/.exec(href)?.[1];
+        if (anchor && target.endsWith(".md")) {
+          expect([...anchorsOf(read(target))], `${file}: ${href}`).toContain(anchor);
+        }
       }
     },
   );
 });
 
 describe("docs/API.md", () => {
-  const api = readFileSync(join(root, "docs/API.md"), "utf8");
-  const program = ts.createProgram(
-    entrySources.map((file) => join(root, file)),
-    {
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    },
-  );
-  const checker = program.getTypeChecker();
-
-  function exportsOf(source: string): string[] {
-    const file = program.getSourceFile(join(root, source));
-    const moduleSymbol = file && checker.getSymbolAtLocation(file);
-    if (!moduleSymbol) {
-      throw new Error(`cannot read exports of ${source}`);
-    }
-    return checker.getExportsOfModule(moduleSymbol).map((symbol) => symbol.getName());
-  }
+  const api = read("docs/API.md");
 
   it.each(entries)(
     "lists exactly the exports of $specifier in the entry-point table",
@@ -187,9 +120,9 @@ describe("docs/API.md", () => {
     const declarations = Object.entries(placeholderTypes)
       .map(([name, type]) => `declare const ${name}: ${type};`)
       .join("\n");
-    const examples = [...api.matchAll(/```ts\n([\s\S]*?)```/g)]
-      .map((match) => match[1] ?? "")
-      .filter((code) => /^import /m.test(code));
+    const examples = codeBlocks(api)
+      .filter((block) => block.lang === "ts" && /^import /m.test(block.code))
+      .map((block) => block.code);
     expect(examples.length).toBeGreaterThan(0);
     const files = new Map(
       examples.map((code, index) => [
@@ -197,7 +130,7 @@ describe("docs/API.md", () => {
         `${declarations}\nexport {};\n${code}`,
       ]),
     );
-    const options: ts.CompilerOptions = {
+    const diagnostics = typeCheck(files, {
       exactOptionalPropertyTypes: true,
       module: ts.ModuleKind.ESNext,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -210,26 +143,7 @@ describe("docs/API.md", () => {
       strict: true,
       target: ts.ScriptTarget.ES2022,
       types: ["node"],
-    };
-    const host = ts.createCompilerHost(options);
-    const { fileExists, getSourceFile, readFile } = host;
-    host.fileExists = (name) => files.has(name) || fileExists(name);
-    host.readFile = (name) => files.get(name) ?? readFile(name);
-    host.getSourceFile = (name, version, ...rest) => {
-      const text = files.get(name);
-      return text === undefined
-        ? getSourceFile(name, version, ...rest)
-        : ts.createSourceFile(name, text, version);
-    };
-    const diagnostics = ts
-      .getPreEmitDiagnostics(ts.createProgram([...files.keys()], options, host))
-      .map((diagnostic) => {
-        const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
-        if (!diagnostic.file) return message;
-        const { line } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
-        const text = diagnostic.file.text.split("\n")[line]?.trim();
-        return `${diagnostic.file.fileName.replace(`${root}/`, "")}: ${text}\n  ${message}`;
-      });
+    });
     expect(diagnostics).toEqual([]);
   }, 60_000);
 

@@ -145,6 +145,22 @@ function formatError(error: unknown): string {
   }
 }
 
+/**
+ * Build the data and log it. If building throws (for example a throwing
+ * getter in `extraData`), drop the entry, as `createLogger` does.
+ */
+function logBuilt(
+  log: Logger["info"],
+  event: string,
+  build: () => LogData,
+): void {
+  try {
+    log(event, build());
+  } catch {
+    // Dropped — building the data must not break the timed call
+  }
+}
+
 function createWithTiming(base: Logger): ExtendedLogger["withTiming"] {
   return async <T>(
     label: string,
@@ -155,17 +171,17 @@ function createWithTiming(base: Logger): ExtendedLogger["withTiming"] {
     base.info(`${label}.start`, extraData);
     try {
       const result = await execute();
-      base.info(`${label}.complete`, {
+      logBuilt(base.info, `${label}.complete`, () => ({
         ...extraData,
         durationMs: Date.now() - start,
-      });
+      }));
       return result;
     } catch (error) {
-      base.error(`${label}.error`, {
+      logBuilt(base.error, `${label}.error`, () => ({
         ...extraData,
         durationMs: Date.now() - start,
         error: formatError(error),
-      });
+      }));
       throw error;
     }
   };
@@ -177,17 +193,17 @@ function createWithTimingSync(base: Logger): ExtendedLogger["withTimingSync"] {
     base.info(`${label}.start`, extraData);
     try {
       const result = execute();
-      base.info(`${label}.complete`, {
+      logBuilt(base.info, `${label}.complete`, () => ({
         ...extraData,
         durationMs: Date.now() - start,
-      });
+      }));
       return result;
     } catch (error) {
-      base.error(`${label}.error`, {
+      logBuilt(base.error, `${label}.error`, () => ({
         ...extraData,
         durationMs: Date.now() - start,
         error: formatError(error),
-      });
+      }));
       throw error;
     }
   };

@@ -43,7 +43,7 @@ All notable changes to this project are documented here. The format follows
 - Publishing: stable releases come only from a pushed `vX.Y.Z` tag on `main` (npm trusted
   publishing with provenance); canary builds still publish on every push to `main`. Actions are
   pinned to commit SHAs, the workflow token is read-only by default, and pnpm is pinned to 10.34.8
-  with a seven-day minimum release age.
+  with a seven-day minimum release age set in `pnpm-workspace.yaml`.
 - README documents the release flow, serialization behaviour and that there is no built-in redaction.
 - README follows the section layout shared by @vllnt packages, for coding agents: when to use,
   quick start, an API table of every export, common tasks, errors and fixes, limits and gotchas,

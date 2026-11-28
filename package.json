@@ -87,10 +87,6 @@
   },
   "packageManager": "pnpm@10.34.8",
   "pnpm": {
-    "minimumReleaseAge": 10080,
-    "minimumReleaseAgeExclude": [
-      "@vllnt/*"
-    ],
     "ignoredBuiltDependencies": [
       "esbuild"
     ],

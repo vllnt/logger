@@ -95,7 +95,6 @@ describe("createBackendLogger", () => {
     }
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    // Loaded without `process`, the module never reads LOG_LEVEL.
     process.env.LOG_LEVEL = "debug";
 
     const logger = fresh.createBackendLogger("test");

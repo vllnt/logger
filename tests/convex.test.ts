@@ -82,7 +82,9 @@ describe("createConvexLogger", () => {
     const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
-    const logger = createConvexLogger("test", "verbose" as LogLevel);
+    /** A level read at runtime, for example from config, that is not a LogLevel. */
+    const runtimeLevel: LogLevel = JSON.parse('"verbose"');
+    const logger = createConvexLogger("test", runtimeLevel);
     logger.debug("suppressed");
     logger.info("visible");
 

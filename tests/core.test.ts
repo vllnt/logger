@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -569,6 +572,99 @@ describe("consoleOutput", () => {
     infoSpy.mockRestore();
   });
 
+  describe("keeps the own fields of an Error", () => {
+    const written = (err: unknown): Record<string, unknown> => {
+      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+      consoleOutput(formatLogEntry("info", "e", { err }));
+      const line = infoSpy.mock.calls[0]![0] as string;
+      infoSpy.mockRestore();
+      return (JSON.parse(line) as { err: Record<string, unknown> }).err;
+    };
+
+    it("of a Node system error", () => {
+      const err = Object.assign(new Error("x"), { code: "ENOENT", errno: -2 });
+
+      expect(written(err)).toEqual({
+        code: "ENOENT",
+        errno: -2,
+        message: "x",
+        name: "Error",
+        stack: expect.stringContaining("x"),
+      });
+    });
+
+    it("of a real fs error", () => {
+      let err: unknown;
+      try {
+        readFileSync(join(tmpdir(), "vllnt-logger-missing", "missing.txt"));
+      } catch (error) {
+        err = error;
+      }
+
+      expect(written(err)).toMatchObject({
+        code: "ENOENT",
+        errno: expect.any(Number),
+        name: "Error",
+        syscall: "open",
+      });
+    });
+
+    it("of an Error from another realm", () => {
+      const err = runInNewContext(
+        'Object.assign(new TypeError("x"), { code: "E_VM" })',
+      ) as unknown;
+
+      expect(written(err)).toMatchObject({
+        code: "E_VM",
+        message: "x",
+        name: "TypeError",
+      });
+    });
+
+    it("skips an own getter that throws", () => {
+      const err = Object.defineProperty(
+        Object.assign(new Error("x"), { code: "E1" }),
+        "bad",
+        {
+          enumerable: true,
+          get(): never {
+            throw new Error("getter");
+          },
+        },
+      );
+
+      expect(written(err)).toEqual({
+        code: "E1",
+        message: "x",
+        name: "Error",
+        stack: expect.stringContaining("x"),
+      });
+    });
+
+    it("keeps name and message when listing own fields throws", () => {
+      const err = new Proxy(new Error("x"), {
+        ownKeys(): never {
+          throw new Error("trap");
+        },
+      });
+
+      expect(written(err)).toMatchObject({ message: "x", name: "Error" });
+    });
+
+    it("marks an own field that refers back to the Error as circular", () => {
+      const err = new Error("x") as Error & { self?: unknown };
+      err.self = err;
+
+      expect(written(err)).toMatchObject({ message: "x", self: "[Circular]" });
+    });
+
+    it("with name, message and stack winning over own fields", () => {
+      const err = Object.assign(new Error("x"), { message: 42, name: "Own" });
+
+      expect(written(err)).toMatchObject({ message: 42, name: "Own" });
+    });
+  });
+
   it("routes an unknown level to console.info", () => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
@@ -816,6 +912,22 @@ describe("never throws from a log call", () => {
     }
     expect(thrown === proxy).toBe(true);
     expect(entries.at(-1)!.error).toBe("[unprintable error]");
+  });
+
+  it("withTimingSync logs String(error) when an Error's message is not a string", () => {
+    const entries: LogEntry[] = [];
+    const logger = createExtendedLogger("t", {
+      getLogLevel: () => "debug",
+      output: (entry) => entries.push(entry),
+    });
+    const err = Object.assign(new Error("x"), { message: 42 });
+
+    expect(() =>
+      logger.withTimingSync("op", () => {
+        throw err;
+      }),
+    ).toThrow();
+    expect(entries.at(-1)!.error).toBe("Error: 42");
   });
 
   describe("withTiming with extraData that has a throwing getter", () => {

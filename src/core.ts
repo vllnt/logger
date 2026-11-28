@@ -141,19 +141,46 @@ export function createLogger(scope: string, config: LoggerConfig): Logger {
   };
 }
 
-type ErrorFields = { message: unknown; name: unknown; stack: unknown };
+const ERROR_FIELDS: readonly ("message" | "name" | "stack")[] = [
+  "message",
+  "name",
+  "stack",
+];
+
+/** Return the own enumerable keys of `value`, or none when listing them throws. */
+function ownKeys(value: object): string[] {
+  try {
+    return Object.keys(value);
+  } catch {
+    return [];
+  }
+}
+
+/** Return the key and its value as one entry, or no entry when reading it throws. */
+function readEntry(value: object, key: string): [string, unknown][] {
+  try {
+    const field: unknown = Reflect.get(value, key);
+    return [[key, field]];
+  } catch {
+    return [];
+  }
+}
 
 /**
- * Read `name`, `message` and `stack` when `value` is an Error, including one
- * from another realm (for example `node:vm`); otherwise return undefined.
- * Avoids `Error.isError` so it runs in Convex and browsers. Never throws: it
- * returns undefined for a field it cannot read.
+ * Read an Error, including one from another realm (for example `node:vm`),
+ * detected by `instanceof` or the `Object.prototype.toString` tag; otherwise
+ * return undefined. Avoids `Error.isError` so it runs in Convex and browsers.
+ * The result holds the own enumerable fields (such as `code` and `errno`) plus
+ * `name`, `message` and `stack`, which win over own fields with those names.
+ * Never throws: it skips a field it cannot read.
  */
-function readError(value: unknown): ErrorFields | undefined {
+function readError(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
   try {
     const isError =
       value instanceof Error ||
-      // The `Object.prototype.toString` tag is "Error" for Errors of any realm.
       Object.prototype.toString.call(value).slice(8, -1) === "Error";
     if (!isError) {
       return undefined;
@@ -161,14 +188,11 @@ function readError(value: unknown): ErrorFields | undefined {
   } catch {
     return undefined;
   }
-  const read = (key: keyof ErrorFields): unknown => {
-    try {
-      return (value as Record<string, unknown>)[key];
-    } catch {
-      return undefined;
-    }
-  };
-  return { message: read("message"), name: read("name"), stack: read("stack") };
+  return Object.fromEntries(
+    [...ownKeys(value), ...ERROR_FIELDS].flatMap((key) =>
+      readEntry(value, key),
+    ),
+  );
 }
 
 function formatError(error: unknown): string {
@@ -251,7 +275,8 @@ function createWithTimingSync(base: Logger): ExtendedLogger["withTimingSync"] {
  * Create an extended logger with timing helpers.
  *
  * @remarks The `.error` entry logs the `message` of a caught Error (from any
- * realm) verbatim, and any other value as `String(value)`.
+ * realm) verbatim, and any other value as `String(value)`. An Error whose
+ * `message` is not a string logs as `String(error)`, for example `"Error: 42"`.
  * Callers handling sensitive errors should sanitize before throwing.
  * `.complete` and `.error` replace `extraData.durationMs`, and `.error` also
  * replaces `extraData.error`; `.start` logs `extraData` unchanged.
@@ -270,8 +295,11 @@ export function createExtendedLogger(
 
 /**
  * JSON.stringify replacer that keeps entries serializable. It turns BigInt
- * into a string, an Error of any realm into `{ name, message, stack }`, and circular
- * references into "[Circular]". Repeated non-circular references stay intact.
+ * into a string, an Error of any realm into its own enumerable fields plus
+ * `name`, `message` and `stack`, and circular references into "[Circular]".
+ * Repeated non-circular references stay intact. Tracking the original values
+ * on the current path also marks an Error whose own field points back to that
+ * Error.
  */
 function createReplacer(): (
   this: unknown,
@@ -279,6 +307,7 @@ function createReplacer(): (
   value: unknown,
 ) => unknown {
   const ancestors: unknown[] = [];
+  const sources: unknown[] = [];
   return function replacer(this: unknown, _key: string, value: unknown) {
     if (typeof value === "bigint") {
       return value.toString();
@@ -288,11 +317,14 @@ function createReplacer(): (
       return resolved;
     }
     // Drop everything below the current holder: the rest is a finished sibling branch.
-    ancestors.splice(ancestors.indexOf(this) + 1);
-    if (ancestors.includes(resolved)) {
+    const depth = ancestors.indexOf(this) + 1;
+    ancestors.splice(depth);
+    sources.splice(depth);
+    if (sources.includes(value)) {
       return "[Circular]";
     }
     ancestors.push(resolved);
+    sources.push(value);
     return resolved;
   };
 }
@@ -310,9 +342,11 @@ function readField(
   }
 }
 
+const FALLBACK_FIELDS: readonly ("event" | "level")[] = ["event", "level"];
+
 /** Build the fallback line, leaving out each field it cannot read. */
 function serializeErrorLine(entry: LogEntry): string {
-  const fields = (["event", "level"] as const).flatMap((key) => {
+  const fields = FALLBACK_FIELDS.flatMap((key) => {
     const value = readField(entry, key);
     return value === undefined ? [] : [`${key}=${value}`];
   });

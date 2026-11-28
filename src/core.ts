@@ -40,7 +40,11 @@ export type ExtendedLogger = Logger & {
   ) => T;
 };
 
-/** Output handler for log entries. Synchronous by design — async adapters must handle their own promises. */
+/**
+ * Output handler for log entries. Synchronous by design: the logger does not
+ * await or handle a returned promise, so an async output must catch its own
+ * rejections.
+ */
 export type LogOutput = (entry: LogEntry) => void;
 
 /** Configuration for creating a logger */
@@ -246,8 +250,11 @@ function createWithTimingSync(base: Logger): ExtendedLogger["withTimingSync"] {
 /**
  * Create an extended logger with timing helpers.
  *
- * @remarks Caught errors use `error.message` verbatim.
+ * @remarks The `.error` entry logs the `message` of a caught Error (from any
+ * realm) verbatim, and any other value as `String(value)`.
  * Callers handling sensitive errors should sanitize before throwing.
+ * `.complete` and `.error` replace `extraData.durationMs`, and `.error` also
+ * replaces `extraData.error`; `.start` logs `extraData` unchanged.
  */
 export function createExtendedLogger(
   scope: string,
@@ -351,7 +358,11 @@ export function consoleOutput(entry: LogEntry): void {
   }
 }
 
-/** Compose outputs into a single LogOutput. Each output runs in isolation. */
+/**
+ * Compose outputs into a single LogOutput. It calls them in order, each with
+ * the same entry object, so an output must not mutate the entry. A throwing
+ * output does not stop the next one.
+ */
 export function composeOutputs(...outputs: LogOutput[]): LogOutput {
   return (entry: LogEntry): void => {
     outputs.forEach((output) => {

@@ -32,7 +32,9 @@ Examples use placeholders (`posthog` for a posthog-js instance, `apiKey`, `disti
 - Log calls never throw. A throwing `getLogLevel`, output or data getter is swallowed.
 - Data is spread first, then `event`, `level` and `timestamp` (ISO 8601), so data cannot
   overwrite those three fields.
-- Outputs are synchronous. There is no built-in redaction.
+- Outputs are synchronous: a returned promise is not awaited. `createPostHogOutput` swallows
+  rejections, but a promise rejected by any other output is not handled; in Node.js that is an
+  unhandled rejection, so catch inside an async output. There is no built-in redaction.
 
 ## `@vllnt/logger`
 
@@ -76,7 +78,9 @@ with `extraData` and `durationMs`. If `execute` throws, they log `error` `<scope
 with `extraData`, `durationMs` and `error` (the `Error` message, otherwise `String(value)`, or
 `"[unprintable error]"`), then rethrow the original error. The message is logged verbatim.
 An entry whose `extraData` cannot be read (for example a throwing getter) is dropped; the helpers
-still return the result or rethrow the original error.
+still return the result or rethrow the original error. `.complete` and `.error` replace
+`extraData.durationMs`, and `.error` also replaces `extraData.error`; `.start` logs `extraData`
+unchanged. An `Error` from another realm (for example `node:vm`) counts as an `Error`.
 
 ```ts
 import { consoleOutput, createExtendedLogger } from "@vllnt/logger";
@@ -92,10 +96,12 @@ const rows = await logger.withTiming("query", () => fetchRows(), { table: "users
 ### `consoleOutput(entry: LogEntry): void`
 
 Default output. Writes `JSON.stringify(entry)` to `console.debug`, `console.info`,
-`console.warn` or `console.error` by level. `BigInt` is written as a string, `Error` as
-`{ name, message, stack }`, a circular reference as `"[Circular]"`. If serialization still fails
-(a throwing `toJSON` or getter) it writes `[logger:serialize-error] event=<event> level=<level>`.
-A throwing `console` method is swallowed.
+`console.warn` or `console.error` by level. `BigInt` is written as a string, an `Error` (also one
+from another realm, such as `node:vm`) as `{ name, message, stack }`, a circular reference as
+`"[Circular]"`. If serialization still fails (a throwing `toJSON` or getter, or data nested
+thousands of levels deep) it writes `[logger:serialize-error] event=<event> level=<level>`,
+leaving out a field it cannot read. An unreadable or unknown `level` writes to `console.info`.
+A throwing `console` method is swallowed. It never throws.
 
 ```ts
 import { consoleOutput, formatLogEntry } from "@vllnt/logger";
@@ -105,7 +111,8 @@ consoleOutput(formatLogEntry("error", "job.failed", { error: new Error("timeout"
 
 ### `composeOutputs(...outputs: LogOutput[]): LogOutput`
 
-Returns one output that calls each output in order. A throwing output does not stop the others.
+Returns one output that calls each output in order. A throwing output does not stop the next
+one. Every output receives the same entry object, so an output must not mutate it.
 
 ```ts
 import { composeOutputs, consoleOutput } from "@vllnt/logger";

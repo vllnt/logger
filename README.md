@@ -127,7 +127,7 @@ Log calls never throw. These are the error messages and markers you can see, and
 
 | Error or message | Cause | Fix |
 | --- | --- | --- |
-| `[logger:serialize-error] event=<event> level=<level>` written instead of JSON | `consoleOutput` could not serialize the entry: a value has a throwing `toJSON`, or a nested object has a throwing getter | Log plain data; convert class instances before logging |
+| `[logger:serialize-error] event=<event> level=<level>` written instead of JSON | `consoleOutput` could not serialize the entry: a value has a throwing `toJSON`, a nested object has a throwing getter, or the data is nested thousands of levels deep. A field of this line that cannot be read is left out | Log plain, shallow data; convert class instances before logging |
 | `"[Circular]"` as a field value | The data has a circular reference | None needed; log a plain copy to keep the full value |
 | `"error": "[unprintable error]"` in a `<label>.error` entry | `withTiming` caught a value whose conversion to a string throws | Throw `Error` instances |
 | The error from your function, after a `<label>.error` entry | `withTiming` and `withTimingSync` rethrow the original error | Catch it around the `withTiming` call |
@@ -142,10 +142,12 @@ Log calls never throw. These are the error messages and markers you can see, and
 - An invalid `LOG_LEVEL` falls back to `warn`. A custom `getLogLevel` that returns an invalid value or throws falls back to `info`.
 - Data keys `event`, `level` and `timestamp` are silently replaced by the logger's values.
 - `formatLogEntry` does not add the scope prefix; only logger methods do.
-- A throwing output is swallowed without a trace. `createPostHogOutput` also swallows rejected promises. Outputs are synchronous; returned promises are not awaited.
+- A throwing output is swallowed without a trace. Outputs are synchronous: a returned promise is not awaited. `createPostHogOutput` swallows rejected promises, but a promise rejected by any other output is not handled; in Node.js that is an unhandled rejection, so catch inside an async output.
+- `composeOutputs` calls outputs in order, each with the same entry object, so an output must not mutate the entry. A throwing output does not stop the next one.
 - A throwing getter at the top level of log-call data, or of `withTiming`/`withTimingSync` `extraData`, drops that entry silently: it runs while the entry is built. The timing helpers still return the result or rethrow the original error. A throwing getter deeper down gives the `[logger:serialize-error]` line.
-- `consoleOutput` writes `BigInt` as a string and `Error` as `{ name, message, stack }`. Like `JSON.stringify`, it writes `Map` and `Set` as `{}` and `NaN` as `null`; it drops `undefined`, functions and symbols from objects and writes them as `null` in arrays.
+- `consoleOutput` writes `BigInt` as a string and an `Error`, also one from another realm such as `node:vm`, as `{ name, message, stack }`. Like `JSON.stringify`, it writes `Map` and `Set` as `{}` and `NaN` as `null`; it drops `undefined`, functions and symbols from objects and writes them as `null` in arrays.
 - `withTiming` logs `error.message` verbatim, without the stack. There is no redaction.
+- `withTiming` and `withTimingSync` replace `extraData.durationMs` in `.complete` and `.error`, and `extraData.error` in `.error`; `.start` logs `extraData` unchanged.
 - `createTestOutput` keeps every entry in memory; create a new one per test.
 
 ## Compatibility
@@ -154,7 +156,7 @@ Log calls never throw. These are the error messages and markers you can see, and
 - ESM only, with typings for every entry point. TypeScript `moduleResolution` must be `nodenext`, `node16` or `bundler`, and the importing file must be ESM: in a CommonJS project, `nodenext` type-checks but the emitted `require` fails at runtime.
 - Node.js: no `engines` field. The build targets ES2024; CI tests on Node.js 24.
 - Convex: `@vllnt/logger/convex` does not read `process.env`. Browsers and edge runtimes: the core uses no Node.js APIs and `createBackendLogger` checks for `process` first, but tests run only on Node.js.
-- PostHog: with posthog-js, pass `(event, properties) => posthog.capture(event, properties)` so `capture` keeps its `this`. posthog-node needs the wrapper shown above; tests check it against posthog-node 6.
+- PostHog: with posthog-js, pass `(event, properties) => posthog.capture(event, properties)` so `capture` keeps its `this`. posthog-node needs the wrapper shown above; it is type-checked against posthog-node 6.
 
 ## Testing
 

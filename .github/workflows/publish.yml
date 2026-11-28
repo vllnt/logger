@@ -47,6 +47,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm check-types
       - run: pnpm build
+      - run: pnpm test:package
       - run: pnpm test
 
   canary:

@@ -65,7 +65,8 @@ All notable changes to this project are documented here. The format follows
   `export type { … }`, and the subpath declarations import shared types from `./index.js`. The
   toolchain change does not change the types consumers see.
 - Development only: `@vllnt/typescript` 3 (stricter compiler flags; published output unchanged),
-  `vitest` 5.1.1, and `pnpm test:coverage`.
+  `vitest` 5.1.1, `pnpm test:coverage`, `pnpm test:package` (run before every publish) and
+  type-checked tests.
 
 ## [0.1.2] - 2026-03-10
 

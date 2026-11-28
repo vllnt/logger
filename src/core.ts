@@ -137,9 +137,43 @@ export function createLogger(scope: string, config: LoggerConfig): Logger {
   };
 }
 
-function formatError(error: unknown): string {
+type ErrorFields = { message: unknown; name: unknown; stack: unknown };
+
+/**
+ * Read `name`, `message` and `stack` when `value` is an Error, including one
+ * from another realm (for example `node:vm`); otherwise return undefined.
+ * Avoids `Error.isError` so it runs in Convex and browsers. Never throws: it
+ * returns undefined for a field it cannot read.
+ */
+function readError(value: unknown): ErrorFields | undefined {
   try {
-    return error instanceof Error ? error.message : String(error);
+    const isError =
+      value instanceof Error ||
+      // The `Object.prototype.toString` tag is "Error" for Errors of any realm.
+      Object.prototype.toString.call(value).slice(8, -1) === "Error";
+    if (!isError) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  const read = (key: keyof ErrorFields): unknown => {
+    try {
+      return (value as Record<string, unknown>)[key];
+    } catch {
+      return undefined;
+    }
+  };
+  return { message: read("message"), name: read("name"), stack: read("stack") };
+}
+
+function formatError(error: unknown): string {
+  const message = readError(error)?.message;
+  if (typeof message === "string") {
+    return message;
+  }
+  try {
+    return String(error);
   } catch {
     return "[unprintable error]";
   }
@@ -229,7 +263,7 @@ export function createExtendedLogger(
 
 /**
  * JSON.stringify replacer that keeps entries serializable. It turns BigInt
- * into a string, Error into `{ name, message, stack }`, and circular
+ * into a string, an Error of any realm into `{ name, message, stack }`, and circular
  * references into "[Circular]". Repeated non-circular references stay intact.
  */
 function createReplacer(): (
@@ -242,10 +276,7 @@ function createReplacer(): (
     if (typeof value === "bigint") {
       return value.toString();
     }
-    const resolved =
-      value instanceof Error
-        ? { message: value.message, name: value.name, stack: value.stack }
-        : value;
+    const resolved = readError(value) ?? value;
     if (typeof resolved !== "object" || resolved === null) {
       return resolved;
     }
@@ -259,21 +290,46 @@ function createReplacer(): (
   };
 }
 
+/** Return `String(entry[key])`, or undefined when reading or converting it throws. */
+function readField(
+  entry: LogEntry,
+  key: "event" | "level",
+): string | undefined {
+  try {
+    const value: unknown = entry[key];
+    return String(value);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Build the fallback line, leaving out each field it cannot read. */
+function serializeErrorLine(entry: LogEntry): string {
+  const fields = (["event", "level"] as const).flatMap((key) => {
+    const value = readField(entry, key);
+    return value === undefined ? [] : [`${key}=${value}`];
+  });
+  return ["[logger:serialize-error]", ...fields].join(" ");
+}
+
 /**
- * Default console output handler. Never throws. It handles BigInt, Error and
- * circular values; anything still unserializable (throwing toJSON or getters)
- * degrades to a minimal event/level line, and console failures disappear.
+ * Default console output handler. Never throws, for any `LogEntry`. It handles
+ * BigInt, Error (from any realm) and circular values; anything still
+ * unserializable (a throwing toJSON or getter, or data nested thousands of
+ * levels deep) degrades to a minimal event/level line that leaves out a field
+ * it cannot read, and console failures disappear. An unreadable or unknown
+ * level writes to `console.info`.
  */
 export function consoleOutput(entry: LogEntry): void {
   let message: string;
   try {
     message = JSON.stringify(entry, createReplacer());
   } catch {
-    message = `[logger:serialize-error] event=${entry.event} level=${entry.level}`;
+    message = serializeErrorLine(entry);
   }
 
   try {
-    switch (entry.level) {
+    switch (readField(entry, "level") ?? "info") {
       case "debug":
         console.debug(message);
         break;

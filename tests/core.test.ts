@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import {
   composeOutputs,
@@ -308,6 +309,72 @@ describe("consoleOutput", () => {
     infoSpy.mockRestore();
   });
 
+  it("does not throw when the event getter throws", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const entry = {
+      get event(): string {
+        throw new Error("x");
+      },
+      level: "info",
+      timestamp: "t",
+    } as LogEntry;
+
+    expect(() => consoleOutput(entry)).not.toThrow();
+    expect(infoSpy).toHaveBeenCalledWith("[logger:serialize-error] level=info");
+
+    infoSpy.mockRestore();
+  });
+
+  it("does not throw when the level getter throws", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const entry = {
+      event: "e",
+      get level(): LogEntry["level"] {
+        throw new Error("x");
+      },
+      timestamp: "t",
+    } as LogEntry;
+
+    expect(() => consoleOutput(entry)).not.toThrow();
+    expect(infoSpy).toHaveBeenCalledWith("[logger:serialize-error] event=e");
+
+    infoSpy.mockRestore();
+  });
+
+  it("serializes an Error from another realm with name, message and stack", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    consoleOutput(
+      formatLogEntry("info", "e", {
+        err: runInNewContext('new TypeError("x")') as unknown,
+      }),
+    );
+
+    const parsed = JSON.parse(infoSpy.mock.calls[0]![0] as string);
+    expect(parsed.err).toMatchObject({ message: "x", name: "TypeError" });
+    expect(parsed.err.stack).toContain("x");
+
+    infoSpy.mockRestore();
+  });
+
+  it("reads a spoofed Error without throwing on its getters", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const spoofed = {
+      get message(): string {
+        throw new Error("getter");
+      },
+      name: "Spoof",
+      [Symbol.toStringTag]: "Error",
+    };
+
+    consoleOutput(formatLogEntry("info", "e", { err: spoofed }));
+
+    const parsed = JSON.parse(infoSpy.mock.calls[0]![0] as string);
+    expect(parsed.err).toEqual({ name: "Spoof" });
+
+    infoSpy.mockRestore();
+  });
+
   it("routes an unknown level to console.info", () => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
@@ -411,6 +478,48 @@ describe("never throws from a log call", () => {
         throw unprintable;
       }),
     ).toThrow();
+    expect(entries.at(-1)!.error).toBe("[unprintable error]");
+  });
+
+  it("withTiming and withTimingSync log the message of an Error from another realm", async () => {
+    const entries: LogEntry[] = [];
+    const logger = createExtendedLogger("t", {
+      getLogLevel: () => "debug",
+      output: (entry) => entries.push(entry),
+    });
+    const foreign = runInNewContext('new TypeError("x")') as unknown;
+
+    await expect(
+      logger.withTiming("op", () => Promise.reject(foreign)),
+    ).rejects.toBe(foreign);
+    expect(() =>
+      logger.withTimingSync("op", () => {
+        throw foreign;
+      }),
+    ).toThrow();
+    expect(
+      entries.filter((entry) => entry.level === "error").map((e) => e.error),
+    ).toEqual(["x", "x"]);
+  });
+
+  it("withTimingSync logs a placeholder for a revoked Proxy", () => {
+    const entries: LogEntry[] = [];
+    const logger = createExtendedLogger("t", {
+      getLogLevel: () => "debug",
+      output: (entry) => entries.push(entry),
+    });
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+
+    let thrown: unknown;
+    try {
+      logger.withTimingSync("op", () => {
+        throw proxy;
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown === proxy).toBe(true);
     expect(entries.at(-1)!.error).toBe("[unprintable error]");
   });
 

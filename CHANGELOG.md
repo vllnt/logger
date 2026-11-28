@@ -4,69 +4,67 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.3] - 2026-11-27
+## [0.2.0] - 2026-11-28
 
 ### Added
 
-- The npm package ships `docs/API.md` (every public export with an example), `llms.txt`,
-  `CHANGELOG.md` and the TypeScript sources in `src/`, so coding agents can read docs that match
-  the installed version from `node_modules/@vllnt/logger/`. `llms.txt` links the shipped files
-  with relative paths.
-- README notes the bundled docs for coding agents.
-- `package.json` sets `homepage` and `keywords`. Docs-only changes on `main` now publish a canary.
-
-### Fixed
-
-- Log calls never throw. A throwing `getLogLevel`, output, or data getter is swallowed instead of
-  propagating into the host application; `withTiming` and `withTimingSync` always rethrow the
-  original error from the wrapped function.
-- An invalid or throwing `getLogLevel` falls back to `info` instead of silently dropping every entry.
-- `consoleOutput` keeps the entry when data holds a `BigInt` (written as a string), an `Error`
-  (written as `{ name, message, stack }`, previously `{}`) or a circular reference
-  (written as `"[Circular]"`). Only a throwing `toJSON` or getter still degrades to the minimal line.
-- `consoleOutput` no longer throws when a `console` method throws.
-- `createPostHogOutput` swallows rejected promises returned by `capture` instead of leaving an
-  unhandled rejection. `PostHogCapture` now accepts functions returning any value.
-- `withTiming` logs a placeholder when a thrown value cannot be converted to a string.
-- `withTiming` and `withTimingSync` no longer throw when `extraData` has a throwing getter: they
-  return the result or rethrow the original error, and drop only the entries that cannot be built.
-- `docs/API.md`: the posthog-node wrapper now type-checks under `exactOptionalPropertyTypes`
-  (`(event, properties = {}) => client.capture({ distinctId, event, properties })`), and the
-  placeholder note names every placeholder. Tests check the entry-point table against the real
-  exports.
-- The publish workflow builds before it runs the tests, so the check of the built package files
-  runs before every publish instead of being skipped.
+- The npm package ships `docs/API.md` (every public export, with a type-checked example for each
+  function), `llms.txt`, `CHANGELOG.md` and the TypeScript sources in `src/`, so coding agents can
+  read docs that match the installed version in `node_modules/@vllnt/logger/`.
+- README: when to use, an API table of every export, common tasks, errors and fixes, limits and
+  gotchas, compatibility and links. Every TypeScript example is type-checked against the built
+  package.
 
 ### Changed
 
-- `package.json` `exports` lists the `types` condition first so every resolver picks the typings.
-- Publishing: stable releases come only from a pushed `vX.Y.Z` tag on `main` (npm trusted
-  publishing with provenance); canary builds still publish on every push to `main`. Actions are
-  pinned to commit SHAs, the workflow token is read-only by default, and pnpm is pinned to 10.34.8
-  with a seven-day minimum release age set in `pnpm-workspace.yaml`.
-- README documents the release flow, serialization behaviour and that there is no built-in redaction.
-- README follows the section layout shared by @vllnt packages, for coding agents: when to use,
-  quick start, an API table of every export, common tasks, errors and fixes, limits and gotchas,
-  and compatibility. Every TypeScript example is complete and is type-checked against the built
-  package in tests; examples without third-party imports also run, and the output they show in
-  `// console.` comments is compared with what they print. `llms.txt` carries the same summary
-  and links to the package page.
-- README adds a `## Links` section (package page, release feed, package index and search, source,
-  issues, npm, community, author and sponsor links). Its `## Related packages` section states that
-  the package has no runtime or peer dependencies and that no other @vllnt package shares code, a
-  test or an example with it. `llms.txt` ends with the shared ecosystem block, which adds the
-  release feed and package search links.
-- `docs/API.md` examples (the code blocks that import a package) are type-checked against the
-  built package, with posthog-node 6 for the posthog-node wrapper; examples that show output in
-  `// console.` comments also run and are compared with it.
-- `package.json`: new `description` and `keywords`, `author` as an object, and new `funding` and
-  `bugs` fields. `createBackendLogger` TSDoc links the package page.
-- Built with tsup 9 and TypeScript 6. The `.d.ts` files of the subpaths and the shared core use
-  `export type { … }`, and the subpath declarations import shared types from `./index.js`. The
-  toolchain change does not change the types consumers see.
-- Development only: `@vllnt/typescript` 3 (stricter compiler flags; published output unchanged),
-  `vitest` 5.1.1, `pnpm test:coverage`, `pnpm test:package` (run before every publish) and
-  type-checked tests.
+- `consoleOutput` writes an `Error` in data (also one from another realm such as `node:vm`, or any
+  object whose `Object.prototype.toString` tag is `Error`) as its own enumerable fields plus
+  `name`, `message` and `stack`; before, it wrote only its own enumerable fields (`{}` for a plain
+  `Error`, `{ code, errno, … }` for a Node.js system error). An own field it cannot read is now
+  left out instead of giving the `[logger:serialize-error]` line. Stack traces now reach the log
+  sink: if it must not store them, map errors to plain data before logging.
+- `consoleOutput` keeps the entry when data holds a `BigInt` (written as a string) or a circular
+  reference (written as `"[Circular]"`) instead of writing the `[logger:serialize-error]` line.
+  Expect strings for these fields when you read the logs.
+- `consoleOutput` never throws: a throwing `console` method or a throwing `event` or `level`
+  getter is swallowed. The `[logger:serialize-error]` line leaves out a field it cannot read, and
+  data nested thousands of levels deep still gives that line. No action needed.
+- Log calls never throw: an error from `getLogLevel`, an output or a data getter is swallowed
+  instead of reaching the caller. A throwing data getter drops the entry; a throwing output has
+  already received it. If you relied on that error, catch it inside your output or check your data
+  before logging.
+- `getLogLevel` results go through `parseLogLevel`: a level in another case or with spaces
+  (`"WARN"`) now selects that level, and any other value, or a throw, falls back to `info`, instead
+  of dropping every entry or throwing. Return a valid `LogLevel` to choose another level.
+- `withTiming` and `withTimingSync` always run `execute` and return its result or rethrow its
+  original error. A throwing output or `extraData` getter no longer stops `execute` from running
+  (at `.start`) or replaces its result or error (at `.complete` and `.error`); only entries that
+  cannot be built are dropped. Keep catching errors around the call as before.
+- The `.error` entry of `withTiming` and `withTimingSync` logs the `message` of an `Error` from
+  another realm (or any object tagged `Error`) instead of `String(error)` (`"<name>: <message>"`
+  for such an Error, `"[object Error]"` for a plain tagged object); `String(error)` (for example
+  `"Error: 42"`) when an Error's `message` is not a string, instead of the raw value; and
+  `"[unprintable error]"` when a thrown value cannot be converted to a string, instead of
+  replacing the original error with a `TypeError`. Update log queries that matched the old text.
+- `createPostHogOutput` catches a rejection of a promise or other thenable that `capture` returns,
+  instead of leaving an unhandled rejection (which stops Node.js by default). It now calls `then`
+  on any thenable `capture` returns, so a lazy thenable starts. Watch delivery failures in your
+  PostHog client if you need them.
+- `PostHogCapture` returns `unknown` instead of `void`; every function accepted before is still
+  accepted. No action needed.
+- `package.json` `exports` lists the `types` condition first, and the package is built with tsup 9
+  and TypeScript 6: the subpath `.d.ts` files import shared types from `./index.js`. Apart from
+  `PostHogCapture`, the types consumers see do not change. No action needed.
+- `package.json`: new `description`, `homepage`, `keywords`, `funding` and `bugs`; `author` is an
+  object.
+- Releases: `@latest` publishes only from a `vX.Y.Z` tag on `main` (pushed, or picked for a manual
+  run) instead of a manual run that bumped the version, and a manual run on `main` now publishes a
+  canary. `@canary` also publishes when only `docs/`, `README.md`, `CHANGELOG.md`, `llms.txt`,
+  `LICENSE` or `package.json` change, and a canary built after a release is numbered above it (for
+  example `0.2.1-canary.<sha>` after `0.2.0`). GitHub release notes now come from this file. No
+  action needed.
+- Development only: CI and release workflow hardening, more tests and package checks, and
+  upgraded development dependencies. Runtime and peer dependencies are still none.
 
 ## [0.1.2] - 2026-03-10
 

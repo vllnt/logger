@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createLogger } from "../src/core.js";
+import {
+  createExtendedLogger,
+  createLogger,
+  formatLogEntry,
+} from "../src/core.js";
 import { createTestOutput } from "../src/testing.js";
 
 describe("createTestOutput", () => {
@@ -23,5 +27,44 @@ describe("createTestOutput", () => {
   it("starts with empty entries", () => {
     const { entries } = createTestOutput();
     expect(entries).toHaveLength(0);
+  });
+
+  it("keeps entries in call order", () => {
+    const { entries, output } = createTestOutput();
+    const logger = createLogger("t", { getLogLevel: () => "debug", output });
+
+    logger.error("a");
+    logger.debug("b");
+    logger.warn("c");
+
+    expect(entries.map((entry) => entry.event)).toEqual(["t.a", "t.b", "t.c"]);
+  });
+
+  it("keeps two instances independent", () => {
+    const first = createTestOutput();
+    const second = createTestOutput();
+
+    first.output(formatLogEntry("info", "one"));
+
+    expect(first.entries).toHaveLength(1);
+    expect(second.entries).toHaveLength(0);
+  });
+
+  it("captures entries from the timing helpers", async () => {
+    const { entries, output } = createTestOutput();
+    const logger = createExtendedLogger("t", {
+      getLogLevel: () => "debug",
+      output,
+    });
+
+    await logger.withTiming("async", async () => 1);
+    logger.withTimingSync("sync", () => 1);
+
+    expect(entries.map((entry) => entry.event)).toEqual([
+      "t.async.start",
+      "t.async.complete",
+      "t.sync.start",
+      "t.sync.complete",
+    ]);
   });
 });

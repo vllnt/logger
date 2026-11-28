@@ -53,6 +53,49 @@ describe("createPostHogOutput", () => {
     await expect(rejected).rejects.toThrow("network");
   });
 
+  it("swallows a non-native thenable that rejects", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    const then = vi.fn((_: unknown, reject: (reason: unknown) => void) => {
+      reject(new Error("network"));
+    });
+    const output = createPostHogOutput(() => ({ then }));
+
+    try {
+      output({
+        event: "test",
+        level: "info",
+        timestamp: "2026-01-01T00:00:00Z",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+
+    expect(then).toHaveBeenCalledOnce();
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  it("does not mutate the entry", () => {
+    const entry = {
+      event: "test",
+      level: "info" as const,
+      timestamp: "2026-01-01T00:00:00Z",
+      userId: "123",
+    };
+    const capture = vi.fn();
+
+    createPostHogOutput(capture)(entry);
+
+    expect(entry).toEqual({
+      event: "test",
+      level: "info",
+      timestamp: "2026-01-01T00:00:00Z",
+      userId: "123",
+    });
+    expect(capture.mock.calls[0]![1]).not.toBe(entry);
+  });
+
   it("ignores a capture result whose then getter throws", () => {
     const output = createPostHogOutput(() => ({
       get then(): never {

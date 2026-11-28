@@ -40,7 +40,11 @@ export type ExtendedLogger = Logger & {
   ) => T;
 };
 
-/** Output handler for log entries. Synchronous by design — async adapters must handle their own promises. */
+/**
+ * Output handler for log entries. Synchronous by design: the logger does not
+ * await or handle a returned promise, so an async output must catch its own
+ * rejections.
+ */
 export type LogOutput = (entry: LogEntry) => void;
 
 /** Configuration for creating a logger */
@@ -137,9 +141,67 @@ export function createLogger(scope: string, config: LoggerConfig): Logger {
   };
 }
 
-function formatError(error: unknown): string {
+const ERROR_FIELDS: readonly ("message" | "name" | "stack")[] = [
+  "message",
+  "name",
+  "stack",
+];
+
+/** Return the own enumerable keys of `value`, or none when listing them throws. */
+function ownKeys(value: object): string[] {
   try {
-    return error instanceof Error ? error.message : String(error);
+    return Object.keys(value);
+  } catch {
+    return [];
+  }
+}
+
+/** Return the key and its value as one entry, or no entry when reading it throws. */
+function readEntry(value: object, key: string): [string, unknown][] {
+  try {
+    const field: unknown = Reflect.get(value, key);
+    return [[key, field]];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Read an Error, including one from another realm (for example `node:vm`),
+ * detected by `instanceof` or the `Object.prototype.toString` tag; otherwise
+ * return undefined. Avoids `Error.isError` so it runs in Convex and browsers.
+ * The result holds the own enumerable fields (such as `code` and `errno`) plus
+ * `name`, `message` and `stack`.
+ * Never throws: it skips a field it cannot read.
+ */
+function readError(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  try {
+    const isError =
+      value instanceof Error ||
+      Object.prototype.toString.call(value).slice(8, -1) === "Error";
+    if (!isError) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  return Object.fromEntries(
+    [...ownKeys(value), ...ERROR_FIELDS].flatMap((key) =>
+      readEntry(value, key),
+    ),
+  );
+}
+
+function formatError(error: unknown): string {
+  const message = readError(error)?.message;
+  if (typeof message === "string") {
+    return message;
+  }
+  try {
+    return String(error);
   } catch {
     return "[unprintable error]";
   }
@@ -212,8 +274,12 @@ function createWithTimingSync(base: Logger): ExtendedLogger["withTimingSync"] {
 /**
  * Create an extended logger with timing helpers.
  *
- * @remarks Caught errors use `error.message` verbatim.
+ * @remarks The `.error` entry logs the `message` of a caught Error (from any
+ * realm) verbatim, and any other value as `String(value)`. An Error whose
+ * `message` is not a string logs as `String(error)`, for example `"Error: 42"`.
  * Callers handling sensitive errors should sanitize before throwing.
+ * `.complete` and `.error` replace `extraData.durationMs`, and `.error` also
+ * replaces `extraData.error`; `.start` logs `extraData` unchanged.
  */
 export function createExtendedLogger(
   scope: string,
@@ -229,8 +295,11 @@ export function createExtendedLogger(
 
 /**
  * JSON.stringify replacer that keeps entries serializable. It turns BigInt
- * into a string, Error into `{ name, message, stack }`, and circular
- * references into "[Circular]". Repeated non-circular references stay intact.
+ * into a string, an Error of any realm into its own enumerable fields plus
+ * `name`, `message` and `stack`, and circular references into "[Circular]".
+ * Repeated non-circular references stay intact. Tracking the original values
+ * on the current path also marks an Error whose own field points back to that
+ * Error.
  */
 function createReplacer(): (
   this: unknown,
@@ -238,42 +307,70 @@ function createReplacer(): (
   value: unknown,
 ) => unknown {
   const ancestors: unknown[] = [];
+  const sources: unknown[] = [];
   return function replacer(this: unknown, _key: string, value: unknown) {
     if (typeof value === "bigint") {
       return value.toString();
     }
-    const resolved =
-      value instanceof Error
-        ? { message: value.message, name: value.name, stack: value.stack }
-        : value;
+    const resolved = readError(value) ?? value;
     if (typeof resolved !== "object" || resolved === null) {
       return resolved;
     }
     // Drop everything below the current holder: the rest is a finished sibling branch.
-    ancestors.splice(ancestors.indexOf(this) + 1);
-    if (ancestors.includes(resolved)) {
+    const depth = ancestors.indexOf(this) + 1;
+    ancestors.splice(depth);
+    sources.splice(depth);
+    if (sources.includes(value)) {
       return "[Circular]";
     }
     ancestors.push(resolved);
+    sources.push(value);
     return resolved;
   };
 }
 
+/** Return `String(entry[key])`, or undefined when reading or converting it throws. */
+function readField(
+  entry: LogEntry,
+  key: "event" | "level",
+): string | undefined {
+  try {
+    const value: unknown = entry[key];
+    return String(value);
+  } catch {
+    return undefined;
+  }
+}
+
+const FALLBACK_FIELDS: readonly ("event" | "level")[] = ["event", "level"];
+
+/** Build the fallback line, leaving out each field it cannot read. */
+function serializeErrorLine(entry: LogEntry): string {
+  const fields = FALLBACK_FIELDS.flatMap((key) => {
+    const value = readField(entry, key);
+    return value === undefined ? [] : [`${key}=${value}`];
+  });
+  return ["[logger:serialize-error]", ...fields].join(" ");
+}
+
 /**
- * Default console output handler. Never throws. It handles BigInt, Error and
- * circular values; anything still unserializable (throwing toJSON or getters)
- * degrades to a minimal event/level line, and console failures disappear.
+ * Default console output handler. Never throws, for any `LogEntry`. It handles
+ * BigInt, Error (from any realm) and circular values; anything still
+ * unserializable (a throwing toJSON or getter, or data nested thousands of
+ * levels deep) degrades to a minimal event/level line that leaves out a field
+ * it cannot read, and console failures disappear. An unreadable or unknown
+ * level writes to `console.info`.
  */
 export function consoleOutput(entry: LogEntry): void {
   let message: string;
   try {
     message = JSON.stringify(entry, createReplacer());
   } catch {
-    message = `[logger:serialize-error] event=${entry.event} level=${entry.level}`;
+    message = serializeErrorLine(entry);
   }
 
   try {
-    switch (entry.level) {
+    switch (readField(entry, "level") ?? "info") {
       case "debug":
         console.debug(message);
         break;
@@ -295,7 +392,11 @@ export function consoleOutput(entry: LogEntry): void {
   }
 }
 
-/** Compose outputs into a single LogOutput. Each output runs in isolation. */
+/**
+ * Compose outputs into a single LogOutput. It calls them in order, each with
+ * the same entry object, so an output must not mutate the entry. A throwing
+ * output does not stop the next one.
+ */
 export function composeOutputs(...outputs: LogOutput[]): LogOutput {
   return (entry: LogEntry): void => {
     outputs.forEach((output) => {

@@ -1,6 +1,7 @@
 /**
  * `tests/package.test.ts` skips its built-files check when `dist/` is missing, so
- * every workflow job that runs the tests must build first.
+ * every workflow job that runs the tests must build first. The publish and CI
+ * quality jobs must also run `pnpm test:package` on the built package.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -13,7 +14,7 @@ const workflowsDir = join(
   "workflows",
 );
 
-/** Ordered `pnpm build` / `pnpm test` steps of each job, by job name. */
+/** Ordered `pnpm build` / `pnpm test` / `pnpm test:package` steps of each job, by job name. */
 function stepsByJob(yaml: string): Map<string, string[]> {
   const jobs = new Map<string, string[]>();
   let inJobs = false;
@@ -30,7 +31,7 @@ function stepsByJob(yaml: string): Map<string, string[]> {
       jobs.set(jobName, job);
       continue;
     }
-    const step = /^\s*-?\s*run:\s*pnpm (?:run )?(build|test)(?::coverage)?(?=\s|$)/.exec(
+    const step = /^\s*-?\s*run:\s*pnpm (?:run )?(build|test(?::package)?)(?::coverage)?(?=\s|$)/.exec(
       line,
     )?.[1];
     if (job && step) {
@@ -49,6 +50,19 @@ describe("workflows", () => {
     expect(publish.get("quality")).toContain("test");
     expect(ci.get("quality")).toContain("test");
   });
+
+  it.each(["publish.yml", "ci.yml"])(
+    "%s runs pnpm test:package after pnpm build in its quality job",
+    (file) => {
+      const steps =
+        stepsByJob(readFileSync(join(workflowsDir, file), "utf8")).get("quality") ?? [];
+      const build = steps.indexOf("build");
+      const testPackage = steps.indexOf("test:package");
+      expect(testPackage, `${file} quality job has no pnpm test:package step`).not.toBe(-1);
+      expect(build, `${file} quality job has no pnpm build step`).not.toBe(-1);
+      expect(testPackage > build, `${file} runs pnpm test:package before pnpm build`).toBe(true);
+    },
+  );
 
   it.each(workflows)("%s builds before it runs the tests", (file) => {
     const jobs = stepsByJob(readFileSync(join(workflowsDir, file), "utf8"));

@@ -75,7 +75,8 @@ logger.debug("request", { path: "/health" });
 
 Both log `info` `<scope>.<label>.start` with `extraData`, then `info` `<scope>.<label>.complete`
 with `extraData` and `durationMs`. If `execute` throws, they log `error` `<scope>.<label>.error`
-with `extraData`, `durationMs` and `error` (the `Error` message, otherwise `String(value)`, or
+with `extraData`, `durationMs` and `error` (the `Error` message; `String(error)`, for example
+`"Error: 42"`, when an Error's `message` is not a string; otherwise `String(value)`, or
 `"[unprintable error]"`), then rethrow the original error. The message is logged verbatim.
 An entry whose `extraData` cannot be read (for example a throwing getter) is dropped; the helpers
 still return the result or rethrow the original error. `.complete` and `.error` replace
@@ -97,7 +98,8 @@ const rows = await logger.withTiming("query", () => fetchRows(), { table: "users
 
 Default output. Writes `JSON.stringify(entry)` to `console.debug`, `console.info`,
 `console.warn` or `console.error` by level. `BigInt` is written as a string, an `Error` (also one
-from another realm, such as `node:vm`) as `{ name, message, stack }`, a circular reference as
+from another realm, such as `node:vm`) as its own enumerable fields (such as `code` and `errno`)
+plus `name`, `message` and `stack`, skipping a field it cannot read, a circular reference as
 `"[Circular]"`. If serialization still fails (a throwing `toJSON` or getter, or data nested
 thousands of levels deep) it writes `[logger:serialize-error] event=<event> level=<level>`,
 leaving out a field it cannot read. An unreadable or unknown `level` writes to `console.info`.

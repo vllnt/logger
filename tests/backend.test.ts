@@ -51,6 +51,61 @@ describe("createBackendLogger", () => {
     expect(warnSpy).toHaveBeenCalledOnce();
   });
 
+  it("applies a LOG_LEVEL set after the logger is created", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const logger = createBackendLogger("test");
+
+    logger.info("dropped");
+    process.env.LOG_LEVEL = "info";
+    logger.info("kept");
+
+    expect(infoSpy).toHaveBeenCalledOnce();
+    expect(infoSpy.mock.calls[0]![0]).toContain('"event":"test.kept"');
+  });
+
+  it("accepts a padded, uppercase LOG_LEVEL", () => {
+    process.env.LOG_LEVEL = "  DEBUG ";
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    createBackendLogger("test").debug("shown");
+
+    expect(debugSpy).toHaveBeenCalledOnce();
+  });
+
+  it("suppresses info and shows error at the default level", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const logger = createBackendLogger("test");
+
+    logger.info("suppressed");
+    logger.error("shown");
+
+    expect(infoSpy).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledOnce();
+  });
+
+  it("uses warn when loaded without a process global", async () => {
+    vi.resetModules();
+    vi.stubGlobal("process", undefined);
+    let fresh: typeof import("../src/backend.js");
+    try {
+      fresh = await import("../src/backend.js");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Loaded without `process`, the module never reads LOG_LEVEL.
+    process.env.LOG_LEVEL = "debug";
+
+    const logger = fresh.createBackendLogger("test");
+    logger.info("suppressed");
+    logger.warn("shown");
+
+    expect(infoSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledOnce();
+  });
+
   it("returns ExtendedLogger with timing helpers", async () => {
     process.env.LOG_LEVEL = "debug";
     vi.spyOn(console, "info").mockImplementation(() => {});

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createConvexLogger } from "../src/convex.js";
+import type { LogLevel } from "../src/core.js";
 
 describe("createConvexLogger", () => {
   it("works without process global (AC-3, FH-1)", () => {
@@ -44,6 +45,49 @@ describe("createConvexLogger", () => {
     expect(debugSpy).not.toHaveBeenCalled();
     expect(infoSpy).toHaveBeenCalledOnce();
 
+    debugSpy.mockRestore();
+    infoSpy.mockRestore();
+  });
+
+  it("ignores process.env.LOG_LEVEL", () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    process.env.LOG_LEVEL = "debug";
+
+    try {
+      createConvexLogger("test").debug("suppressed");
+    } finally {
+      delete process.env.LOG_LEVEL;
+    }
+
+    expect(debugSpy).not.toHaveBeenCalled();
+    debugSpy.mockRestore();
+  });
+
+  it("emits debug at an explicit debug level, as one JSON line", () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    createConvexLogger("orders", "debug").debug("created", { orderId: "o_1" });
+
+    expect(debugSpy).toHaveBeenCalledOnce();
+    expect(JSON.parse(debugSpy.mock.calls[0]![0] as string)).toEqual({
+      event: "orders.created",
+      level: "debug",
+      orderId: "o_1",
+      timestamp: expect.any(String),
+    });
+    debugSpy.mockRestore();
+  });
+
+  it("falls back to info for an invalid runtime level", () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    const logger = createConvexLogger("test", "verbose" as LogLevel);
+    logger.debug("suppressed");
+    logger.info("visible");
+
+    expect(debugSpy).not.toHaveBeenCalled();
+    expect(infoSpy).toHaveBeenCalledOnce();
     debugSpy.mockRestore();
     infoSpy.mockRestore();
   });

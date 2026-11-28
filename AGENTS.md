@@ -36,9 +36,10 @@ Node.js is pinned in `.node-version`; pnpm is pinned by `packageManager` in `pac
 |---------|------|
 | `pnpm install --frozen-lockfile` | Install |
 | `pnpm lint` | ESLint, zero warnings |
-| `pnpm check-types` | `tsc --noEmit` |
+| `pnpm check-types` | `tsc --noEmit` over `src/`, `tests/` and the config files (`tsconfig.check.json`; the build uses `tsconfig.json`) |
 | `pnpm test` | Vitest |
 | `pnpm test:coverage` | Vitest with v8 coverage of `src/` |
+| `pnpm test:package` | Packs the built package, installs it into a temp consumer, imports every `exports` entry point and type-checks a strict `NodeNext` consumer. Needs `pnpm build` |
 | `pnpm build` | tsup build to `dist/` |
 | `pnpm pack --dry-run` | Preview tarball (`dist`, `src`, `docs/API.md`, `CHANGELOG.md`, `llms.txt`, `README.md`, `LICENSE`, `package.json`) |
 

@@ -16,11 +16,13 @@ Convex, PostHog and tests.
 ```bash
 pnpm lint
 pnpm check-types
-pnpm test
 pnpm build
+pnpm test:package
+pnpm test
 ```
 
-CI runs the same four checks on every pull request.
+CI runs the same checks, plus `bash scripts/test-check-package-contents.sh`, on every pull request.
+`pnpm test:package` and some tests check the built package, so build first.
 
 ## Pull Requests
 

@@ -171,7 +171,7 @@ function readEntry(value: object, key: string): [string, unknown][] {
  * detected by `instanceof` or the `Object.prototype.toString` tag; otherwise
  * return undefined. Avoids `Error.isError` so it runs in Convex and browsers.
  * The result holds the own enumerable fields (such as `code` and `errno`) plus
- * `name`, `message` and `stack`, which win over own fields with those names.
+ * `name`, `message` and `stack`.
  * Never throws: it skips a field it cannot read.
  */
 function readError(value: unknown): Record<string, unknown> | undefined {

@@ -82,8 +82,13 @@ describe("createConvexLogger", () => {
     const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
-    /** A level read at runtime, for example from config, that is not a LogLevel. */
-    const runtimeLevel: LogLevel = JSON.parse('"verbose"');
+    /** A loose check, as a caller might write for config, that lets any string through. */
+    const isLooseLevel = (value: unknown): value is LogLevel =>
+      typeof value === "string";
+    const runtimeLevel: unknown = Reflect.get({ level: "verbose" }, "level");
+    if (!isLooseLevel(runtimeLevel)) {
+      expect.unreachable("the runtime level is a string");
+    }
     const logger = createConvexLogger("test", runtimeLevel);
     logger.debug("suppressed");
     logger.info("visible");

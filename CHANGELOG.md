@@ -19,7 +19,9 @@ All notable changes to this project are documented here. The format follows
 
 - `consoleOutput` writes an `Error` in data (also one from another realm such as `node:vm`, or any
   object whose `Object.prototype.toString` tag is `Error`) as its own enumerable fields plus
-  `name`, `message` and `stack`; a plain `Error` was `{}` before. Stack traces now reach the log
+  `name`, `message` and `stack`; before, it wrote only its own enumerable fields (`{}` for a plain
+  `Error`, `{ code, errno, … }` for a Node.js system error). An own field it cannot read is now
+  left out instead of giving the `[logger:serialize-error]` line. Stack traces now reach the log
   sink: if it must not store them, map errors to plain data before logging.
 - `consoleOutput` keeps the entry when data holds a `BigInt` (written as a string) or a circular
   reference (written as `"[Circular]"`) instead of writing the `[logger:serialize-error]` line.
@@ -39,9 +41,10 @@ All notable changes to this project are documented here. The format follows
   (at `.start`) or replaces its result or error (at `.complete` and `.error`); only entries that
   cannot be built are dropped. Keep catching errors around the call as before.
 - The `.error` entry of `withTiming` and `withTimingSync` logs the `message` of an `Error` from
-  another realm (or any object tagged `Error`) instead of `"<name>: <message>"`; `String(error)`
-  (for example `"Error: 42"`) when an Error's `message` is not a string, instead of the raw value;
-  and `"[unprintable error]"` when a thrown value cannot be converted to a string, instead of
+  another realm (or any object tagged `Error`) instead of `String(error)` (`"<name>: <message>"`
+  for such an Error, `"[object Error]"` for a plain tagged object); `String(error)` (for example
+  `"Error: 42"`) when an Error's `message` is not a string, instead of the raw value; and
+  `"[unprintable error]"` when a thrown value cannot be converted to a string, instead of
   replacing the original error with a `TypeError`. Update log queries that matched the old text.
 - `createPostHogOutput` catches a rejection of a promise or other thenable that `capture` returns,
   instead of leaving an unhandled rejection (which stops Node.js by default). It now calls `then`
@@ -55,10 +58,11 @@ All notable changes to this project are documented here. The format follows
 - `package.json`: new `description`, `homepage`, `keywords`, `funding` and `bugs`; `author` is an
   object.
 - Releases: `@latest` publishes only from a `vX.Y.Z` tag on `main` (pushed, or picked for a manual
-  run) instead of a manual run that bumped the version, `@canary` also publishes when only docs,
-  `README.md`, `CHANGELOG.md`, `llms.txt`, `LICENSE` or `package.json` change, and a canary built
-  after a release is numbered above it (for example `0.2.1-canary.<sha>` after `0.2.0`). No action
-  needed.
+  run) instead of a manual run that bumped the version, and a manual run on `main` now publishes a
+  canary. `@canary` also publishes when only `docs/`, `README.md`, `CHANGELOG.md`, `llms.txt`,
+  `LICENSE` or `package.json` change, and a canary built after a release is numbered above it (for
+  example `0.2.1-canary.<sha>` after `0.2.0`). GitHub release notes now come from this file. No
+  action needed.
 - Development only: CI and release workflow hardening, more tests and package checks, and
   upgraded development dependencies. Runtime and peer dependencies are still none.
 

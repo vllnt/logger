@@ -658,7 +658,7 @@ describe("consoleOutput", () => {
       expect(written(err)).toMatchObject({ message: "x", self: "[Circular]" });
     });
 
-    it("with name, message and stack winning over own fields", () => {
+    it("writes an assigned name and a non-string message", () => {
       const err = Object.assign(new Error("x"), { message: 42, name: "Own" });
 
       expect(written(err)).toMatchObject({ message: 42, name: "Own" });
